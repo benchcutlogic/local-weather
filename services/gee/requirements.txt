@@ -1,0 +1,2 @@
+earthengine-api==1.4.2
+google-cloud-bigquery==3.27.0

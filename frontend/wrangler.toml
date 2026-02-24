@@ -1,0 +1,12 @@
+name = "hyperlocal-wx-app"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+COMMENTARY_API_URL = "https://gemini-forecast-commentary-xxxxxxxxxx-uc.a.run.app"
+GCS_COMMENTARY_BASE = "https://storage.googleapis.com/hyperlocal-wx-commentary"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hyperlocal_weather_db"
+database_id = "placeholder-update-after-terraform-apply"

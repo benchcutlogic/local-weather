@@ -1,0 +1,46 @@
+services:
+  ingest:
+    build: ./services/ingest
+    ports:
+      - "8080:8080"
+    environment:
+      - GCP_PROJECT=hyperlocal-wx-prod
+      - BQ_DATASET=weather_core
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+      - CITIES_CONFIG={"denver":{"name":"Denver, CO","lat":39.7392,"lon":-104.9903,"elev_bands":[1500,1600,1700,1800,2000]},"salt-lake-city":{"name":"Salt Lake City, UT","lat":40.7608,"lon":-111.891,"elev_bands":[1300,1500,2000,2500]},"durango":{"name":"Durango, CO","lat":37.2753,"lon":-107.8801,"elev_bands":[2000,2200,2500,2800,3000]}}
+    volumes:
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-~/.config/gcloud/application_default_credentials.json}:/app/credentials.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  commentary:
+    build: ./services/commentary
+    ports:
+      - "8081:8081"
+    environment:
+      - GCP_PROJECT=hyperlocal-wx-prod
+      - BQ_DATASET=weather_core
+      - COMMENTARY_BUCKET=hyperlocal-wx-commentary
+      - GEMINI_MODEL=gemini-1.5-flash-002
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+      - CITIES_CONFIG={"denver":{"name":"Denver, CO","lat":39.7392,"lon":-104.9903,"elev_bands":[1500,1600,1700,1800,2000]},"salt-lake-city":{"name":"Salt Lake City, UT","lat":40.7608,"lon":-111.891,"elev_bands":[1300,1500,2000,2500]},"durango":{"name":"Durango, CO","lat":37.2753,"lon":-107.8801,"elev_bands":[2000,2200,2500,2800,3000]}}
+    volumes:
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-~/.config/gcloud/application_default_credentials.json}:/app/credentials.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "4321:4321"
+    environment:
+      - COMMENTARY_API_URL=http://commentary:8081
+      - GCS_COMMENTARY_BASE=http://commentary:8081
+    depends_on:
+      - commentary
