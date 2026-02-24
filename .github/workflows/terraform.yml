@@ -20,14 +20,28 @@ permissions:
 
 env:
   TF_VERSION: "1.7.0"
-  WORKLOAD_IDENTITY_PROVIDER: "projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-  SERVICE_ACCOUNT: "terraform-ci@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com"
 
 jobs:
+  check-secrets:
+    name: Check Required Secrets
+    runs-on: ubuntu-latest
+    outputs:
+      secrets_ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        run: |
+          if [[ -z "${{ secrets.GCP_PROJECT_NUMBER }}" || -z "${{ secrets.GCP_PROJECT_ID }}" ]]; then
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "⚠️ GCP secrets not configured — skipping Terraform jobs"
+          else
+            echo "ready=true" >> $GITHUB_OUTPUT
+          fi
+
   plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    needs: check-secrets
+    if: github.event_name == 'pull_request' && needs.check-secrets.outputs.secrets_ready == 'true'
 
     steps:
       - name: Checkout
@@ -36,8 +50,8 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ env.SERVICE_ACCOUNT }}
+          workload_identity_provider: "projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+          service_account: "terraform-ci@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -61,6 +75,7 @@ jobs:
 
       - name: Comment Plan on PR
         uses: actions/github-script@v7
+        if: always()
         with:
           script: |
             const output = `#### Terraform Plan
@@ -79,7 +94,8 @@ jobs:
   apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: check-secrets
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.check-secrets.outputs.secrets_ready == 'true'
 
     steps:
       - name: Checkout
@@ -88,8 +104,8 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ env.SERVICE_ACCOUNT }}
+          workload_identity_provider: "projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+          service_account: "terraform-ci@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

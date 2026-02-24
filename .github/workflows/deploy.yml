@@ -27,6 +27,8 @@ jobs:
       commentary: ${{ steps.filter.outputs.commentary }}
       gee: ${{ steps.filter.outputs.gee }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      gcp_ready: ${{ steps.check.outputs.gcp_ready }}
+      cf_ready: ${{ steps.check.outputs.cf_ready }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -41,12 +43,16 @@ jobs:
               - 'services/gee/**'
             frontend:
               - 'frontend/**'
+      - id: check
+        run: |
+          [[ -n "${{ secrets.GCP_PROJECT_NUMBER }}" ]] && echo "gcp_ready=true" >> $GITHUB_OUTPUT || echo "gcp_ready=false" >> $GITHUB_OUTPUT
+          [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] && echo "cf_ready=true" >> $GITHUB_OUTPUT || echo "cf_ready=false" >> $GITHUB_OUTPUT
 
   deploy-ingest:
     name: Deploy Ingest Service
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.ingest == 'true'
+    if: needs.detect-changes.outputs.ingest == 'true' && needs.detect-changes.outputs.gcp_ready == 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +85,7 @@ jobs:
     name: Deploy Commentary Service
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.commentary == 'true'
+    if: needs.detect-changes.outputs.commentary == 'true' && needs.detect-changes.outputs.gcp_ready == 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -112,7 +118,7 @@ jobs:
     name: Deploy Frontend
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true'
+    if: needs.detect-changes.outputs.frontend == 'true' && needs.detect-changes.outputs.cf_ready == 'true'
 
     steps:
       - uses: actions/checkout@v4
