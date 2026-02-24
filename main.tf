@@ -2,10 +2,14 @@ module "analytics" {
   source     = "./modules/analytics"
   project_id = var.gcp_project_id
   region     = var.gcp_region
+
+  depends_on = [google_project_service.apis]
 }
 
 module "notifications" {
   source = "./modules/notifications"
+
+  depends_on = [google_project_service.apis]
 }
 
 module "ingestion" {
@@ -14,6 +18,8 @@ module "ingestion" {
   region        = var.gcp_region
   bq_dataset_id = module.analytics.dataset_id
   cities_json   = jsonencode(var.cities) # Pass city coordinates to the Python ingestor
+
+  depends_on = [google_project_service.apis]
 }
 
 module "ml_and_jobs" {
@@ -21,6 +27,8 @@ module "ml_and_jobs" {
   project_id    = var.gcp_project_id
   region        = var.gcp_region
   bq_dataset_id = module.analytics.dataset_id
+
+  depends_on = [google_project_service.apis]
 }
 
 module "edge" {
