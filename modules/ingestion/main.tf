@@ -32,9 +32,18 @@ resource "google_cloud_run_v2_service" "grib_parser" {
       resources {
         limits = { cpu = "2", memory = "8Gi" } # High RAM required for xarray array manipulation
       }
-      env { name = "BQ_DATASET", value = var.bq_dataset_id }
-      env { name = "GCP_PROJECT", value = var.project_id }
-      env { name = "CITIES_CONFIG", value = var.cities_json }
+      env {
+        name  = "BQ_DATASET"
+        value = var.bq_dataset_id
+      }
+      env {
+        name  = "GCP_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "CITIES_CONFIG"
+        value = var.cities_json
+      }
     }
     scaling {
       min_instance_count = 0  # Scale to zero when no model runs

@@ -38,8 +38,14 @@ resource "google_cloud_run_v2_service" "llm_commentary" {
       resources {
         limits = { cpu = "1", memory = "2Gi" }
       }
-      env { name = "BQ_DATASET", value = var.bq_dataset_id }
-      env { name = "GCP_PROJECT", value = var.project_id }
+      env {
+        name  = "BQ_DATASET"
+        value = var.bq_dataset_id
+      }
+      env {
+        name  = "GCP_PROJECT"
+        value = var.project_id
+      }
     }
     scaling {
       min_instance_count = 0

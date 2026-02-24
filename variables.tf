@@ -1,6 +1,12 @@
 variable "gcp_project_id" { type = string }
-variable "gcp_region" { type = string, default = "us-central1" }
-variable "cloudflare_api_token" { type = string, sensitive = true }
+variable "gcp_region" {
+  type    = string
+  default = "us-central1"
+}
+variable "cloudflare_api_token" {
+  type      = string
+  sensitive = true
+}
 variable "cloudflare_account_id" { type = string }
 variable "cloudflare_zone_id" { type = string }
 variable "base_domain" { type = string }
