@@ -1,0 +1,66 @@
+name: Auto-fix Greptile Review Comments
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  fix-greptile:
+    # Only Greptile reviews on non-fork PRs (fork repos can't receive pushes from this workflow)
+    if: |
+      github.event.review.user.login == 'greptile-apps[bot]' &&
+      github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Loop guard
+        id: loop_guard
+        run: |
+          COUNT=$(git log --oneline --grep="address Greptile" | wc -l | tr -d ' ')
+          if [ "$COUNT" -ge 3 ]; then echo "skip=true" >> $GITHUB_OUTPUT
+          else echo "skip=false" >> $GITHUB_OUTPUT; fi
+
+      - uses: anthropics/claude-code-action@v1
+        if: steps.loop_guard.outputs.skip != 'true'
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review and selectively fix Greptile comments on PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+
+            Do NOT blindly resolve everything. Assess each thread and only resolve ones you actually address.
+
+            Step 1 - Fetch unresolved Greptile threads:
+            gh api graphql -f query='{ repository(owner: "${{ github.repository_owner }}", name: "${{ github.event.repository.name }}") { pullRequest(number: ${{ github.event.pull_request.number }}) { reviewThreads(first: 100) { nodes { id isResolved isOutdated comments(first: 1) { nodes { author { login } body path line originalLine diffHunk } } } } } } }' | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | select(.comments.nodes[0].author.login | startswith("greptile")) | {id, isOutdated, path: .comments.nodes[0].path, line: .comments.nodes[0].line, body: .comments.nodes[0].body, diffHunk: .comments.nodes[0].diffHunk}]'
+
+            If empty, stop.
+
+            Step 2 - For each thread, decide:
+            - FIX: valid issue, present in current code, fixable -> apply fix
+            - ALREADY_FIXED: code was already updated -> resolve with note
+            - OUTDATED: isOutdated=true and concern is addressed -> resolve with note
+            - SKIP: incorrect, subjective, or architectural -> do NOT resolve, post a comment explaining why, leave for human review
+
+            Read the actual file before deciding. Document your decision for each thread.
+
+            Step 3 - Apply fixes (FIX only). No pnpm install or build commands.
+
+            Step 4 - Commit if changes exist:
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add -A && git commit -m "fix: address Greptile review comments on PR #${{ github.event.pull_request.number }}" || echo "nothing to commit"
+            git push origin HEAD
+
+            Step 5 - Resolve ONLY FIX + ALREADY_FIXED + OUTDATED threads. NOT SKIP threads:
+            gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "THREAD_ID"}) { thread { isResolved } } }'
+
+            Step 6 - Post summary to PR:
+            gh pr comment ${{ github.event.pull_request.number }} --body "Greptile auto-fix: [list each thread with path:line, decision (FIX/ALREADY_FIXED/OUTDATED/SKIP), and one-line reason]"
