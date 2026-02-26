@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: true
+  commands:
+    terraform-fmt:
+      glob: "*.tf"
+      run: terraform fmt {staged_files}
+      stage_fixed: true
+    ts-typecheck:
+      root: "frontend/"
+      glob: "src/**/*.{ts,tsx}"
+      run: pnpm exec tsc --noEmit

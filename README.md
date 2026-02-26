@@ -107,6 +107,10 @@ cities = {
 }
 ```
 
+## Development
+
+Install git hooks: `brew install lefthook && lefthook install`
+
 ## Local Development
 
 ```bash
