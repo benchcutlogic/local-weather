@@ -22,6 +22,7 @@ class AoiConfig:
     min_lon: float
     max_lat: float
     max_lon: float
+    polygon: list[tuple[float, float]] = field(default_factory=list)
 
 
 def load_cities() -> dict[str, CityConfig]:
@@ -39,6 +40,16 @@ def load_cities() -> dict[str, CityConfig]:
     return cities
 
 
+def load_city_aoi_map() -> dict[str, str]:
+    """Load city->AOI mapping from CITY_AOI_MAP env var or default Durango mapping."""
+    default_map = {
+        "durango": "la-plata-county",
+    }
+    raw = os.environ.get("CITY_AOI_MAP", json.dumps(default_map))
+    data = json.loads(raw)
+    return {str(k): str(v) for k, v in data.items()}
+
+
 def load_aois() -> dict[str, AoiConfig]:
     """Load AOIs from AOI_CONFIG JSON env var or use a La Plata County default."""
     default_aois = {
@@ -48,18 +59,41 @@ def load_aois() -> dict[str, AoiConfig]:
             "min_lon": -108.35,
             "max_lat": 37.50,
             "max_lon": -107.45,
+            "polygon": [
+                {"lat": 37.00, "lon": -108.35},
+                {"lat": 37.00, "lon": -107.45},
+                {"lat": 37.50, "lon": -107.45},
+                {"lat": 37.50, "lon": -108.35},
+            ],
         }
     }
     raw = os.environ.get("AOI_CONFIG", json.dumps(default_aois))
     data = json.loads(raw)
     aois: dict[str, AoiConfig] = {}
     for slug, info in data.items():
+        polygon_raw = info.get("polygon", []) or []
+        polygon = [(float(p["lat"]), float(p["lon"])) for p in polygon_raw if "lat" in p and "lon" in p]
+
+        min_lat = info.get("min_lat")
+        min_lon = info.get("min_lon")
+        max_lat = info.get("max_lat")
+        max_lon = info.get("max_lon")
+
+        if polygon:
+            lats = [p[0] for p in polygon]
+            lons = [p[1] for p in polygon]
+            min_lat = min_lat if min_lat is not None else min(lats)
+            max_lat = max_lat if max_lat is not None else max(lats)
+            min_lon = min_lon if min_lon is not None else min(lons)
+            max_lon = max_lon if max_lon is not None else max(lons)
+
         aois[slug] = AoiConfig(
             name=info["name"],
-            min_lat=info["min_lat"],
-            min_lon=info["min_lon"],
-            max_lat=info["max_lat"],
-            max_lon=info["max_lon"],
+            min_lat=float(min_lat),
+            min_lon=float(min_lon),
+            max_lat=float(max_lat),
+            max_lon=float(max_lon),
+            polygon=polygon,
         )
     return aois
 

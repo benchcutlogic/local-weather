@@ -18,6 +18,8 @@ module "ingestion" {
   region                       = var.gcp_region
   bq_dataset_id                = module.analytics.dataset_id
   cities_json                  = jsonencode(var.cities) # Pass city coordinates to the Python ingestor
+  aois_json                    = jsonencode(var.aois)
+  city_aoi_map_json            = jsonencode(var.city_aoi_map)
   deploy_service_account_email = "deploy-ci@${var.gcp_project_id}.iam.gserviceaccount.com"
 
   depends_on = [google_project_service.apis]

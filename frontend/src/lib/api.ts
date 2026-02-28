@@ -45,17 +45,49 @@ const GCS_BASE =
 const API_BASE =
   import.meta.env.COMMENTARY_API_URL || "";
 
+export type CommentaryFetchState =
+  | "ok"
+  | "missing"
+  | "not_found"
+  | "stale"
+  | "error";
+
+export interface CommentaryFetchResult {
+  commentary: Commentary | null;
+  state: CommentaryFetchState;
+  lastUpdated: string | null;
+  statusCode?: number;
+}
+
 export async function fetchCommentary(
   citySlug: string,
-): Promise<Commentary | null> {
+): Promise<CommentaryFetchResult> {
   try {
     const res = await fetch(`${GCS_BASE}/${citySlug}/latest.json`, {
       headers: { Accept: "application/json" },
     });
-    if (!res.ok) return null;
-    return (await res.json()) as Commentary;
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        return { commentary: null, state: "not_found", lastUpdated: null, statusCode: 404 };
+      }
+      return { commentary: null, state: "missing", lastUpdated: null, statusCode: res.status };
+    }
+
+    const commentary = (await res.json()) as Commentary;
+    const updatedAt = commentary.updated_at || commentary.generated_at || null;
+
+    let state: CommentaryFetchState = "ok";
+    if (updatedAt) {
+      const ageMs = Date.now() - new Date(updatedAt).getTime();
+      if (Number.isFinite(ageMs) && ageMs > 6 * 60 * 60 * 1000) {
+        state = "stale";
+      }
+    }
+
+    return { commentary, state, lastUpdated: updatedAt };
   } catch {
-    return null;
+    return { commentary: null, state: "error", lastUpdated: null };
   }
 }
 

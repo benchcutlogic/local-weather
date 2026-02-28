@@ -25,6 +25,42 @@ resource "google_project_iam_member" "bq_writer" {
   member  = "serviceAccount:${google_service_account.ml_sa.email}"
 }
 
+# Public commentary artifact bucket consumed by frontend static fetches
+resource "google_storage_bucket" "commentary" {
+  name                        = "hyperlocal-wx-commentary"
+  location                    = "US"
+  uniform_bucket_level_access = true
+  force_destroy               = false
+
+  cors {
+    origin          = ["*"]
+    method          = ["GET", "HEAD", "OPTIONS"]
+    response_header = ["Content-Type", "Cache-Control", "ETag"]
+    max_age_seconds = 3600
+  }
+
+  lifecycle_rule {
+    condition {
+      age = 30
+    }
+    action {
+      type = "Delete"
+    }
+  }
+}
+
+resource "google_storage_bucket_iam_member" "commentary_public_read" {
+  bucket = google_storage_bucket.commentary.name
+  role   = "roles/storage.objectViewer"
+  member = "allUsers"
+}
+
+resource "google_storage_bucket_iam_member" "commentary_writer" {
+  bucket = google_storage_bucket.commentary.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.ml_sa.email}"
+}
+
 # Cloud Run Service for Gemini LLM Commentary Generation
 # Queries BigQuery for forecast + drift + terrain context, generates conversational commentary
 resource "google_cloud_run_v2_service" "llm_commentary" {
@@ -45,6 +81,10 @@ resource "google_cloud_run_v2_service" "llm_commentary" {
       env {
         name  = "GCP_PROJECT"
         value = var.project_id
+      }
+      env {
+        name  = "COMMENTARY_BUCKET"
+        value = google_storage_bucket.commentary.name
       }
     }
     scaling {
