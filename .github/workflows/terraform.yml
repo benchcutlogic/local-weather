@@ -33,7 +33,7 @@ jobs:
     steps:
       - id: check
         run: |
-          if [[ -z "${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}" || -z "${{ secrets.TERRAFORM_SERVICE_ACCOUNT }}" || -z "${{ secrets.GCP_PROJECT_ID }}" ]]; then
+          if [[ -z "${{ vars.WORKLOAD_IDENTITY_PROVIDER }}" || -z "${{ vars.TERRAFORM_SERVICE_ACCOUNT }}" || -z "${{ secrets.GCP_PROJECT_ID }}" ]]; then
             echo "ready=false" >> $GITHUB_OUTPUT
             echo "⚠️ Required GCP auth secrets not configured — skipping Terraform jobs"
           else
@@ -53,8 +53,9 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.TERRAFORM_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.TERRAFORM_SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -107,8 +108,9 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.TERRAFORM_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.TERRAFORM_SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

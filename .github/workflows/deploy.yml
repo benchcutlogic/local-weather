@@ -17,8 +17,8 @@ env:
   GCP_REGION: us-central1
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/weather-services
-  WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-  SERVICE_ACCOUNT: ${{ secrets.DEPLOY_SERVICE_ACCOUNT }}
+  WORKLOAD_IDENTITY_PROVIDER: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+  SERVICE_ACCOUNT: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
 
 jobs:
   detect-changes:
@@ -47,7 +47,7 @@ jobs:
               - 'frontend/**'
       - id: check
         run: |
-          if [[ -n "${{ secrets.GCP_PROJECT_ID }}" && -n "${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}" && -n "${{ secrets.DEPLOY_SERVICE_ACCOUNT }}" ]]; then
+          if [[ -n "${{ secrets.GCP_PROJECT_ID }}" && -n "${{ vars.WORKLOAD_IDENTITY_PROVIDER }}" && -n "${{ vars.DEPLOY_SERVICE_ACCOUNT }}" ]]; then
             echo "gcp_ready=true" >> $GITHUB_OUTPUT
           else
             echo "gcp_ready=false" >> $GITHUB_OUTPUT
@@ -68,6 +68,7 @@ jobs:
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
@@ -101,6 +102,7 @@ jobs:
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
