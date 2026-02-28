@@ -20,6 +20,18 @@ resource "google_project_iam_member" "deploy_ci_writer" {
   member  = "serviceAccount:${var.deploy_service_account_email}"
 }
 
+resource "google_project_iam_member" "deploy_ci_run_admin" {
+  project = var.project_id
+  role    = "roles/run.admin"
+  member  = "serviceAccount:${var.deploy_service_account_email}"
+}
+
+resource "google_project_iam_member" "deploy_ci_sa_user" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${var.deploy_service_account_email}"
+}
+
 resource "google_service_account" "ingest_sa" {
   account_id   = "nwp-ingest-sa"
   display_name = "NWP Ingestion Service Account"
