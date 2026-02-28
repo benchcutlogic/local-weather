@@ -92,7 +92,7 @@ async def _run_ingestion(
     )
 
     points = await read_grib2_for_cities(model, run_time, forecast_hours, CITIES)
-    rows_written = await write_forecast_points(points)
+    rows_written = await write_forecast_points(points, CITIES)
 
     logger.info(
         "Completed %s ingestion: %d points extracted, %d rows written",

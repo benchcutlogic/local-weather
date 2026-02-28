@@ -54,3 +54,6 @@ GRIB2_VARIABLES: dict[str, dict[str, str]] = {
 BQ_DATASET = os.environ.get("BQ_DATASET", "weather_core")
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "hyperlocal-wx-prod")
 BQ_TABLE = "forecast_runs"
+BQ_GRID_TILES_TABLE = "grid_tiles"
+BQ_GRID_TILE_FIELDS_TABLE = "grid_tile_fields"
+BQ_GRID_POINTS_SAMPLED_TABLE = "grid_points_sampled"
