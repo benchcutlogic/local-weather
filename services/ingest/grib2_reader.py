@@ -186,28 +186,28 @@ def _compute_wind(u: float | None, v: float | None) -> tuple[float | None, float
 
 
 def _build_grib2_url(model: str, run_time: datetime, forecast_hour: int) -> str:
-    """Build the GCS URL for a GRIB2 file."""
+    """Build public HTTP URL for a GRIB2 file (AWS Open Data buckets)."""
     date_str = run_time.strftime("%Y%m%d")
     cycle = f"{run_time.hour:02d}"
 
     if model == "hrrr":
         return (
-            f"gs://noaa-hrrr-bdp-pds/hrrr.{date_str}/conus/"
+            f"https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.{date_str}/conus/"
             f"hrrr.t{cycle}z.wrfsfcf{forecast_hour:02d}.grib2"
         )
     elif model == "gfs":
         return (
-            f"gs://noaa-gfs-bdp-pds/gfs.{date_str}/{cycle}/atmos/"
+            f"https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.{date_str}/{cycle}/atmos/"
             f"gfs.t{cycle}z.pgrb2.0p25.f{forecast_hour:03d}"
         )
     elif model == "nam":
         return (
-            f"gs://noaa-nam-bdp-pds/nam.{date_str}/"
+            f"https://noaa-nam-pds.s3.amazonaws.com/nam.{date_str}/"
             f"nam.t{cycle}z.awphys{forecast_hour:02d}.tm00.grib2"
         )
     elif model == "ecmwf":
         return (
-            f"gs://noaa-ecmwf-bdp-pds/{date_str}/{cycle}z/"
+            f"https://noaa-ecmwf-pds.s3.amazonaws.com/{date_str}/{cycle}z/"
             f"0p25/oper/{forecast_hour:03d}.grib2"
         )
     else:
@@ -243,7 +243,7 @@ async def read_grib2_for_cities(
 
         try:
             # Read idx file to find byte ranges
-            with fsspec.open(idx_url, "r", anon=True) as f:
+            with fsspec.open(idx_url, "r") as f:
                 idx_content = f.read()
 
             byte_ranges = _find_byte_ranges(idx_content)
@@ -254,15 +254,15 @@ async def read_grib2_for_cities(
 
             # Read each variable's byte range
             var_data: dict[str, xr.Dataset] = {}
-            fs = fsspec.filesystem("gs", anon=True)
 
             for var_key, (start, end) in byte_ranges.items():
                 try:
-                    grib2_path = grib2_url.replace("gs://", "")
-                    if end is not None:
-                        data = fs.cat_file(grib2_path, start=start, end=end)
-                    else:
-                        data = fs.cat_file(grib2_path, start=start)
+                    with fsspec.open(grib2_url, "rb") as f:
+                        f.seek(start)
+                        if end is not None:
+                            data = f.read(end - start)
+                        else:
+                            data = f.read()
 
                     # Write temp bytes and open with xarray
                     import tempfile
