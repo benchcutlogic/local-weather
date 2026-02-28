@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+import traceback
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -428,11 +429,12 @@ async def read_grib2_for_cities(
                         var_data[var_key] = ds
                     except Exception as e:
                         logger.warning(
-                            "Failed to decode %s for %s: %s: %r",
+                            "Failed to decode %s for %s: %s: %r\n%s",
                             var_key,
                             grib2_url,
                             e.__class__.__name__,
                             e,
+                            traceback.format_exc(limit=4),
                         )
                     finally:
                         os.unlink(tmp_path)
