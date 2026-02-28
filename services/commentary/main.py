@@ -85,6 +85,38 @@ class GeeResponse(BaseModel):
     status: str
 
 
+def _has_usable_core_values(row: dict) -> bool:
+    return any(
+        row.get(k) is not None
+        for k in ("temperature_2m", "precip_kg_m2", "wind_speed_10m", "snow_depth", "relative_humidity")
+    )
+
+
+def _build_data_delay_commentary(city_slug: str, city_name: str) -> dict:
+    now_iso = datetime.now(timezone.utc).isoformat()
+    return {
+        "city_slug": city_slug,
+        "city_name": city_name,
+        "generated_at": now_iso,
+        "headline": "Forecast data is delayed — refreshing shortly",
+        "current_conditions": "Our model feed for this city is currently delayed. We are waiting for the next successful ingest cycle.",
+        "todays_forecast": "A full model-based forecast is temporarily unavailable. Please check back shortly as new data lands.",
+        "model_analysis": "We did not publish a synthetic fallback forecast because current model input coverage is below minimum quality thresholds.",
+        "elevation_breakdown": {
+            "summary": "Elevation-specific guidance is temporarily unavailable while model data refreshes.",
+            "bands": [],
+        },
+        "extended_outlook": "Extended outlook will repopulate automatically once model data coverage returns.",
+        "confidence": {
+            "level": "low",
+            "explanation": "Confidence is low because the latest model ingest does not yet contain enough usable fields.",
+        },
+        "best_model": "Unavailable (insufficient current data)",
+        "alerts": ["Data delay: model ingest coverage below quality threshold"],
+        "updated_at": now_iso,
+    }
+
+
 async def _call_gemini(prompt: str) -> str:
     """Call Vertex AI Gemini for commentary generation."""
     import vertexai
@@ -159,6 +191,19 @@ async def generate_commentary(city_slug: str) -> CommentaryResponse:
                 city_slug=city_slug,
                 status="skipped",
                 error="No forecast data available",
+            )
+
+        usable_count = sum(1 for row in forecasts if _has_usable_core_values(row))
+        logger.info("Usable forecast rows for %s: %d/%d", city_slug, usable_count, len(forecasts))
+
+        # Quality gate: do not ask LLM to improvise when model fields are effectively missing.
+        if usable_count == 0:
+            commentary = _build_data_delay_commentary(city_slug=city_slug, city_name=city.name)
+            gcs_path = _upload_commentary_to_gcs(city_slug, commentary)
+            return CommentaryResponse(
+                city_slug=city_slug,
+                status="success",
+                gcs_path=gcs_path,
             )
 
         # Build prompt and call Gemini
