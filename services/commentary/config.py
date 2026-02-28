@@ -33,4 +33,4 @@ def load_cities() -> dict[str, CityConfig]:
 BQ_DATASET = os.environ.get("BQ_DATASET", "weather_core")
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "hyperlocal-wx-prod")
 GCS_BUCKET = os.environ.get("COMMENTARY_BUCKET", "hyperlocal-wx-commentary")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash-002")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
