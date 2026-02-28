@@ -35,7 +35,7 @@ jobs:
         run: |
           if [[ -z "${{ vars.WORKLOAD_IDENTITY_PROVIDER }}" || -z "${{ vars.TERRAFORM_SERVICE_ACCOUNT }}" || -z "${{ secrets.GCP_PROJECT_ID }}" || -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" || -z "${{ secrets.CLOUDFLARE_ZONE_ID }}" ]]; then
             echo "ready=false" >> $GITHUB_OUTPUT
-            echo "⚠️ Required GCP auth secrets not configured — skipping Terraform jobs"
+            echo "⚠️ Required secrets not configured — skipping Terraform jobs"
           else
             echo "ready=true" >> $GITHUB_OUTPUT
           fi
