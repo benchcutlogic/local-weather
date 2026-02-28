@@ -12,9 +12,9 @@ locals {
     "earthengine.googleapis.com",
     "iam.googleapis.com",
     "cloudresourcemanager.googleapis.com",
-    "compute.googleapis.com",       # Required by Cloud Run networking
-    "eventarc.googleapis.com",      # For event-driven triggers
-    "storage.googleapis.com",       # GCS for commentary JSON
+    "compute.googleapis.com",  # Required by Cloud Run networking
+    "eventarc.googleapis.com", # For event-driven triggers
+    "storage.googleapis.com",  # GCS for commentary JSON
   ]
 }
 
