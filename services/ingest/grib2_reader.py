@@ -216,14 +216,40 @@ def _normalize_lon(lon: float) -> float:
     return ((lon + 180) % 360) - 180
 
 
+def _point_in_polygon(lat: float, lon: float, polygon: list[tuple[float, float]]) -> bool:
+    """Ray-casting point in polygon test for (lat, lon)."""
+    inside = False
+    n = len(polygon)
+    if n < 3:
+        return False
+
+    j = n - 1
+    for i in range(n):
+        yi, xi = polygon[i]  # lat, lon
+        yj, xj = polygon[j]
+        intersects = ((yi > lat) != (yj > lat)) and (
+            lon < (xj - xi) * (lat - yi) / ((yj - yi) + 1e-12) + xi
+        )
+        if intersects:
+            inside = not inside
+        j = i
+    return inside
+
+
 def _aoi_target_points(aoi: AoiConfig, resolution_deg: float = 0.25) -> list[tuple[float, float]]:
-    """Generate a list of (lat, lon) sample points covering an AOI at the given resolution."""
+    """Generate a list of (lat, lon) sample points covering an AOI at the given resolution.
+
+    If polygon coordinates are provided, points are clipped to that polygon (scaffolding for
+    county/custom AOIs). Otherwise falls back to bbox coverage.
+    """
     lat = aoi.min_lat
     points: list[tuple[float, float]] = []
     while lat <= aoi.max_lat + 1e-9:
         lon = aoi.min_lon
         while lon <= aoi.max_lon + 1e-9:
-            points.append((round(lat, 4), round(lon, 4)))
+            point = (round(lat, 4), round(lon, 4))
+            if not aoi.polygon or _point_in_polygon(point[0], point[1], aoi.polygon):
+                points.append(point)
             lon = round(lon + resolution_deg, 4)
         lat = round(lat + resolution_deg, 4)
     return points
@@ -323,6 +349,7 @@ async def read_grib2_for_cities(
     forecast_hours: list[int],
     cities: dict[str, CityConfig],
     aois: dict[str, AoiConfig] | None = None,
+    city_aoi_map: dict[str, str] | None = None,
 ) -> tuple[list[ForecastPoint], list[GridSamplePoint]]:
     """Read GRIB2 data for all cities using byte-range requests.
 
@@ -391,9 +418,15 @@ async def read_grib2_for_cities(
                 except Exception as e:
                     logger.warning("Failed to read byte range for %s: %s", var_key, e)
 
-            # Extract AOI-wide grid samples (county-wide coverage)
+            # Extract AOI-wide grid samples (county/custom coverage).
+            # If city_aoi_map is provided, only sample mapped AOIs (deduped).
             if aois:
-                for aoi_slug, aoi in aois.items():
+                selected_aoi_slugs = set(aois.keys())
+                if city_aoi_map:
+                    selected_aoi_slugs = {aoi_slug for aoi_slug in city_aoi_map.values() if aoi_slug in aois}
+
+                for aoi_slug in selected_aoi_slugs:
+                    aoi = aois[aoi_slug]
                     grid_samples.extend(
                         _extract_aoi_grid_samples(
                             var_data=var_data,

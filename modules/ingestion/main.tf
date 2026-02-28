@@ -2,6 +2,12 @@ variable "project_id" {}
 variable "region" {}
 variable "bq_dataset_id" {}
 variable "cities_json" {}
+variable "aois_json" {
+  default = "{}"
+}
+variable "city_aoi_map_json" {
+  default = "{}"
+}
 variable "deploy_service_account_email" {}
 variable "enable_noaa_pubsub_subscription" {
   type    = bool
@@ -66,6 +72,14 @@ resource "google_cloud_run_v2_service" "grib_parser" {
       env {
         name  = "CITIES_CONFIG"
         value = var.cities_json
+      }
+      env {
+        name  = "AOI_CONFIG"
+        value = var.aois_json
+      }
+      env {
+        name  = "CITY_AOI_MAP"
+        value = var.city_aoi_map_json
       }
     }
     scaling {
