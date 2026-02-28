@@ -12,7 +12,7 @@ import fsspec
 import numpy as np
 import xarray as xr
 
-from config import GRIB2_VARIABLES, CityConfig
+from config import AoiConfig, GRIB2_VARIABLES, CityConfig
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,24 @@ class ForecastPoint:
     snow_depth: float | None
     freezing_level_m: float | None
     cape: float | None
+    relative_humidity: float | None
+
+
+@dataclass
+class GridSamplePoint:
+    """Extracted grid sample point for AOI coverage."""
+
+    aoi_slug: str
+    model_name: str
+    run_time: datetime
+    valid_time: datetime
+    lat: float
+    lon: float
+    temperature_2m: float | None
+    precip_kg_m2: float | None
+    wind_u_10m: float | None
+    wind_v_10m: float | None
+    snow_depth: float | None
     relative_humidity: float | None
 
 
@@ -193,6 +211,78 @@ def _compute_wind(u: float | None, v: float | None) -> tuple[float | None, float
     return round(speed, 2), round(direction, 1)
 
 
+def _normalize_lon(lon: float) -> float:
+    """Normalize longitude into [-180, 180]."""
+    return ((lon + 180) % 360) - 180
+
+
+def _extract_aoi_grid_samples(
+    var_data: dict[str, xr.Dataset],
+    aoi_slug: str,
+    aoi: AoiConfig,
+    model: str,
+    run_time: datetime,
+    valid_time: datetime,
+) -> list[GridSamplePoint]:
+    """Extract all available grid cells inside an AOI bounding box."""
+    if "temperature_2m" not in var_data:
+        return []
+
+    ref_ds = var_data["temperature_2m"]
+    lat_coord = next((c for c in ref_ds.coords if "lat" in c.lower()), None)
+    lon_coord = next((c for c in ref_ds.coords if "lon" in c.lower()), None)
+    if lat_coord is None or lon_coord is None:
+        return []
+
+    lats = np.asarray(ref_ds[lat_coord].values)
+    lons_raw = np.asarray(ref_ds[lon_coord].values)
+
+    # Build index mask in normalized lon space
+    lons_norm = np.vectorize(_normalize_lon)(lons_raw)
+    lat_idx = np.where((lats >= aoi.min_lat) & (lats <= aoi.max_lat))[0]
+    lon_idx = np.where((lons_norm >= aoi.min_lon) & (lons_norm <= aoi.max_lon))[0]
+
+    if len(lat_idx) == 0 or len(lon_idx) == 0:
+        return []
+
+    samples: list[GridSamplePoint] = []
+    for i in lat_idx:
+        for j in lon_idx:
+            lat = float(lats[i])
+            lon = float(lons_norm[j])
+
+            t = _extract_nearest_value(var_data["temperature_2m"], lat, lon, "t2m") if "temperature_2m" in var_data else None
+            p = _extract_nearest_value(var_data["precip"], lat, lon, "tp") if "precip" in var_data else None
+            u = _extract_nearest_value(var_data["wind_u_10m"], lat, lon, "u10") if "wind_u_10m" in var_data else None
+            v = _extract_nearest_value(var_data["wind_v_10m"], lat, lon, "v10") if "wind_v_10m" in var_data else None
+            s = _extract_nearest_value(var_data["snow_depth"], lat, lon, "sde") if "snow_depth" in var_data else None
+            rh = _extract_nearest_value(var_data["relative_humidity"], lat, lon, "r2") if "relative_humidity" in var_data else None
+
+            samples.append(GridSamplePoint(
+                aoi_slug=aoi_slug,
+                model_name=model.upper(),
+                run_time=run_time.replace(tzinfo=timezone.utc),
+                valid_time=valid_time,
+                lat=lat,
+                lon=lon,
+                temperature_2m=t,
+                precip_kg_m2=p,
+                wind_u_10m=u,
+                wind_v_10m=v,
+                snow_depth=s,
+                relative_humidity=rh,
+            ))
+
+    logger.info(
+        "Extracted %d AOI grid samples for %s (%s) at valid_time=%s",
+        len(samples),
+        aoi_slug,
+        aoi.name,
+        valid_time.isoformat(),
+    )
+    return samples
+
+
 def _build_grib2_url(model: str, run_time: datetime, forecast_hour: int) -> str:
     """Build public HTTP URL for a GRIB2 file (AWS Open Data buckets)."""
     date_str = run_time.strftime("%Y%m%d")
@@ -232,12 +322,14 @@ async def read_grib2_for_cities(
     run_time: datetime,
     forecast_hours: list[int],
     cities: dict[str, CityConfig],
-) -> list[ForecastPoint]:
+    aois: dict[str, AoiConfig] | None = None,
+) -> tuple[list[ForecastPoint], list[GridSamplePoint]]:
     """Read GRIB2 data for all cities using byte-range requests.
 
-    Returns a list of ForecastPoint objects ready for BigQuery insertion.
+    Returns forecast points and AOI grid samples for BigQuery insertion.
     """
     results: list[ForecastPoint] = []
+    grid_samples: list[GridSamplePoint] = []
 
     for fhr in forecast_hours:
         grib2_url = _build_grib2_url(model, run_time, fhr)
@@ -298,6 +390,20 @@ async def read_grib2_for_cities(
 
                 except Exception as e:
                     logger.warning("Failed to read byte range for %s: %s", var_key, e)
+
+            # Extract AOI-wide grid samples (county-wide coverage)
+            if aois:
+                for aoi_slug, aoi in aois.items():
+                    grid_samples.extend(
+                        _extract_aoi_grid_samples(
+                            var_data=var_data,
+                            aoi_slug=aoi_slug,
+                            aoi=aoi,
+                            model=model,
+                            run_time=run_time,
+                            valid_time=valid_time,
+                        )
+                    )
 
             # Extract values for each city
             for city_slug, city in cities.items():
@@ -388,7 +494,7 @@ async def read_grib2_for_cities(
             logger.error("Failed to process %s f%03d: %s", model.upper(), fhr, e)
             continue
 
-    return results
+    return results, grid_samples
 
 
 def _lapse_rate_adjust(temp_k: float, elevation_m: int, base_elev: int = 1500) -> float:

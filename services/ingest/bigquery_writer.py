@@ -18,7 +18,7 @@ from config import (
     GCP_PROJECT,
     CityConfig,
 )
-from grib2_reader import ForecastPoint
+from grib2_reader import ForecastPoint, GridSamplePoint
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,11 @@ def _insert_rows_batched(client: bigquery.Client, table_ref: str, rows: list[dic
     return total_inserted
 
 
-async def write_forecast_points(points: list[ForecastPoint], cities: dict[str, CityConfig]) -> int:
+async def write_forecast_points(
+    points: list[ForecastPoint],
+    cities: dict[str, CityConfig],
+    grid_samples: list[GridSamplePoint] | None = None,
+) -> int:
     """Stream forecast points to BigQuery and populate gridded indexing tables.
 
     Returns the number of forecast_runs rows successfully written.
@@ -100,32 +104,56 @@ async def write_forecast_points(points: list[ForecastPoint], cities: dict[str, C
     ingest_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
 
-    sampled_points: list[ForecastPoint] = [p for p in points if p.elevation_band is None and p.city_slug in cities]
-    if not sampled_points:
-        return total_inserted
-
     sampled_rows: list[dict] = []
-    for p in sampled_points:
-        city = cities[p.city_slug]
-        tile = _tile_id(city.lat, city.lon)
-        wind_u, wind_v = _uv_from_speed_dir(p.wind_speed_10m, p.wind_dir_10m)
-        sampled_rows.append({
-            "model_name": p.model_name,
-            "run_time": p.run_time.isoformat(),
-            "valid_time": p.valid_time.isoformat(),
-            "tile_id": tile,
-            "city_slug": p.city_slug,
-            "lat": city.lat,
-            "lon": city.lon,
-            "temperature_2m": p.temperature_2m,
-            "precip_kg_m2": p.precip_kg_m2,
-            "wind_u_10m": wind_u,
-            "wind_v_10m": wind_v,
-            "snow_depth": p.snow_depth,
-            "relative_humidity": p.relative_humidity,
-            "ingest_id": ingest_id,
-            "created_at": created_at,
-        })
+
+    # Prefer AOI-wide grid samples when available.
+    if grid_samples:
+        for gp in grid_samples:
+            tile = _tile_id(gp.lat, gp.lon)
+            sampled_rows.append({
+                "model_name": gp.model_name,
+                "run_time": gp.run_time.isoformat(),
+                "valid_time": gp.valid_time.isoformat(),
+                "tile_id": tile,
+                "city_slug": gp.aoi_slug,
+                "lat": gp.lat,
+                "lon": gp.lon,
+                "temperature_2m": gp.temperature_2m,
+                "precip_kg_m2": gp.precip_kg_m2,
+                "wind_u_10m": gp.wind_u_10m,
+                "wind_v_10m": gp.wind_v_10m,
+                "snow_depth": gp.snow_depth,
+                "relative_humidity": gp.relative_humidity,
+                "ingest_id": ingest_id,
+                "created_at": created_at,
+            })
+    else:
+        # Fallback to city-point samples if AOI grid samples are unavailable.
+        sampled_points: list[ForecastPoint] = [p for p in points if p.elevation_band is None and p.city_slug in cities]
+        for p in sampled_points:
+            city = cities[p.city_slug]
+            tile = _tile_id(city.lat, city.lon)
+            wind_u, wind_v = _uv_from_speed_dir(p.wind_speed_10m, p.wind_dir_10m)
+            sampled_rows.append({
+                "model_name": p.model_name,
+                "run_time": p.run_time.isoformat(),
+                "valid_time": p.valid_time.isoformat(),
+                "tile_id": tile,
+                "city_slug": p.city_slug,
+                "lat": city.lat,
+                "lon": city.lon,
+                "temperature_2m": p.temperature_2m,
+                "precip_kg_m2": p.precip_kg_m2,
+                "wind_u_10m": wind_u,
+                "wind_v_10m": wind_v,
+                "snow_depth": p.snow_depth,
+                "relative_humidity": p.relative_humidity,
+                "ingest_id": ingest_id,
+                "created_at": created_at,
+            })
+
+    if not sampled_rows:
+        return total_inserted
 
     sampled_table_ref = f"{GCP_PROJECT}.{BQ_DATASET}.{BQ_GRID_POINTS_SAMPLED_TABLE}"
     _insert_rows_batched(client, sampled_table_ref, sampled_rows)
