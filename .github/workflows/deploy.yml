@@ -2,6 +2,17 @@ name: Build & Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy_services:
+        description: "Deploy ingest/commentary services"
+        required: false
+        default: false
+        type: boolean
+      deploy_frontend:
+        description: "Deploy frontend (Cloudflare Pages)"
+        required: false
+        default: true
+        type: boolean
   push:
     branches: [main]
     paths:
@@ -15,7 +26,7 @@ permissions:
 
 env:
   GCP_REGION: us-central1
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_PROJECT_ID: hyperlocal-wx-prod
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/weather-services
   WORKLOAD_IDENTITY_PROVIDER: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
   SERVICE_ACCOUNT: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
@@ -58,7 +69,7 @@ jobs:
     name: Deploy Ingest Service
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.ingest == 'true' && needs.detect-changes.outputs.gcp_ready == 'true'
+    if: (github.event_name == 'push' && needs.detect-changes.outputs.ingest == 'true' && needs.detect-changes.outputs.gcp_ready == 'true') || (github.event_name == 'workflow_dispatch' && inputs.deploy_services && needs.detect-changes.outputs.gcp_ready == 'true')
 
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +104,7 @@ jobs:
     name: Deploy Commentary Service
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.commentary == 'true' && needs.detect-changes.outputs.gcp_ready == 'true'
+    if: (github.event_name == 'push' && needs.detect-changes.outputs.commentary == 'true' && needs.detect-changes.outputs.gcp_ready == 'true') || (github.event_name == 'workflow_dispatch' && inputs.deploy_services && needs.detect-changes.outputs.gcp_ready == 'true')
 
     steps:
       - uses: actions/checkout@v4
@@ -128,7 +139,7 @@ jobs:
     name: Deploy Frontend
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true' && needs.detect-changes.outputs.cf_ready == 'true'
+    if: (github.event_name == 'push' && needs.detect-changes.outputs.frontend == 'true' && needs.detect-changes.outputs.cf_ready == 'true') || (github.event_name == 'workflow_dispatch' && inputs.deploy_frontend && needs.detect-changes.outputs.cf_ready == 'true')
 
     steps:
       - uses: actions/checkout@v4
