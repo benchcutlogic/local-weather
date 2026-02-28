@@ -96,6 +96,7 @@ jobs:
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
           service: grib2-byte-parser
           region: ${{ env.GCP_REGION }}
           image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/weather-services/grib2-parser:${{ github.sha }}
@@ -131,6 +132,7 @@ jobs:
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
           service: gemini-forecast-commentary
           region: ${{ env.GCP_REGION }}
           image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/weather-services/llm-commentary:${{ github.sha }}
