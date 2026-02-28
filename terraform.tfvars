@@ -1,5 +1,5 @@
 gcp_project_id = "hyperlocal-wx-prod"
-base_domain    = "hyperlocalwx.com"
+base_domain    = "hyperwx.com"
 
 cities = {
   "denver" = {
