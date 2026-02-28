@@ -2,6 +2,7 @@ variable "project_id" {}
 variable "region" {}
 variable "bq_dataset_id" {}
 variable "cities_json" {}
+variable "deploy_service_account_email" {}
 variable "enable_noaa_pubsub_subscription" {
   type    = bool
   default = false
@@ -11,6 +12,13 @@ resource "google_artifact_registry_repository" "wx_repo" {
   location      = var.region
   repository_id = "weather-services"
   format        = "DOCKER"
+}
+
+resource "google_artifact_registry_repository_iam_member" "deploy_ci_writer" {
+  location   = google_artifact_registry_repository.wx_repo.location
+  repository = google_artifact_registry_repository.wx_repo.repository_id
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:${var.deploy_service_account_email}"
 }
 
 resource "google_service_account" "ingest_sa" {

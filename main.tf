@@ -13,11 +13,12 @@ module "notifications" {
 }
 
 module "ingestion" {
-  source        = "./modules/ingestion"
-  project_id    = var.gcp_project_id
-  region        = var.gcp_region
-  bq_dataset_id = module.analytics.dataset_id
-  cities_json   = jsonencode(var.cities) # Pass city coordinates to the Python ingestor
+  source                       = "./modules/ingestion"
+  project_id                   = var.gcp_project_id
+  region                       = var.gcp_region
+  bq_dataset_id                = module.analytics.dataset_id
+  cities_json                  = jsonencode(var.cities) # Pass city coordinates to the Python ingestor
+  deploy_service_account_email = "deploy-ci@${var.gcp_project_id}.iam.gserviceaccount.com"
 
   depends_on = [google_project_service.apis]
 }
