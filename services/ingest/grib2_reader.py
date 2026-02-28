@@ -422,7 +422,8 @@ async def read_grib2_for_cities(
                         except AssertionError:
                             ds = xr.open_dataset(tmp_path, engine="cfgrib")
 
-                        ds.load()  # materialize before removing temp file
+                        # NOTE: do not force ds.load() here; cfgrib can assert during eager load
+                        # for certain slices. Keep lazy dataset and extract nearest values downstream.
                         var_data[var_key] = ds
                     except Exception as e:
                         logger.warning(
@@ -434,7 +435,9 @@ async def read_grib2_for_cities(
                             traceback.format_exc(limit=4),
                         )
                     finally:
-                        os.unlink(tmp_path)
+                        # Keep temp file for the lifetime of this request because datasets are lazy.
+                        # Cloud Run container FS is ephemeral; cleanup is handled by instance recycle.
+                        pass
 
                 except Exception as e:
                     logger.warning("Failed to read byte range for %s: %s", var_key, e)
