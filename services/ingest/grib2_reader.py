@@ -390,12 +390,22 @@ async def read_grib2_for_cities(
                 try:
                     # Use HTTP Range header — fsspec doesn't do real range requests for http://
                     range_header = f"bytes={start}-{end - 1}" if end is not None else f"bytes={start}-"
-                    resp = _requests.get(grib2_url, headers={"Range": range_header}, timeout=60)
+                    resp = _requests.get(
+                        grib2_url,
+                        headers={
+                            "Range": range_header,
+                            # Critical for byte-accurate GRIB slices: avoid transfer/content decoding.
+                            "Accept-Encoding": "identity",
+                        },
+                        timeout=60,
+                        stream=True,
+                    )
                     resp.raise_for_status()
-                    if resp.status_code not in (200, 206):
-                        logger.warning("Unexpected HTTP %s for range %s on %s", resp.status_code, range_header, grib2_url)
+                    if resp.status_code != 206:
+                        logger.warning("Expected HTTP 206 for range %s on %s, got %s", range_header, grib2_url, resp.status_code)
                         continue
-                    data = resp.content
+                    resp.raw.decode_content = False
+                    data = resp.raw.read()
 
                     # Write bytes to temp file and decode with cfgrib
                     with tempfile.NamedTemporaryFile(suffix=".grib2", delete=False) as tmp:
@@ -483,6 +493,15 @@ async def read_grib2_for_cities(
                     )
 
                 wind_speed, wind_dir = _compute_wind(wind_u, wind_v)
+
+                if all(v is None for v in [temp_val, precip_val, wind_speed, snow_val, rh_val, freezing_val, cape_val]):
+                    logger.warning(
+                        "Skipping all-null city point for %s %s f%03d",
+                        city_slug,
+                        model.upper(),
+                        fhr,
+                    )
+                    continue
 
                 # Base-level point (no elevation band)
                 results.append(ForecastPoint(
