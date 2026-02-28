@@ -46,8 +46,8 @@ resource "google_cloud_run_v2_service" "grib_parser" {
       }
     }
     scaling {
-      min_instance_count = 0  # Scale to zero when no model runs
-      max_instance_count = 4  # Handle parallel model runs (GFS + HRRR + NAM + ECMWF)
+      min_instance_count = 0 # Scale to zero when no model runs
+      max_instance_count = 4 # Handle parallel model runs (GFS + HRRR + NAM + ECMWF)
     }
   }
 }
@@ -78,8 +78,8 @@ resource "google_pubsub_subscription" "noaa_hrrr_trigger" {
 # Cloud Scheduler fallback: trigger ingestion for GFS/NAM on a schedule
 # (in case Pub/Sub notifications aren't available for all models)
 resource "google_cloud_scheduler_job" "gfs_ingest_schedule" {
-  name     = "gfs-ingest-trigger"
-  schedule = "30 4,10,16,22 * * *" # 30 min after each GFS cycle (00z, 06z, 12z, 18z)
+  name      = "gfs-ingest-trigger"
+  schedule  = "30 4,10,16,22 * * *" # 30 min after each GFS cycle (00z, 06z, 12z, 18z)
   time_zone = "UTC"
 
   http_target {
@@ -90,8 +90,8 @@ resource "google_cloud_scheduler_job" "gfs_ingest_schedule" {
 }
 
 resource "google_cloud_scheduler_job" "nam_ingest_schedule" {
-  name     = "nam-ingest-trigger"
-  schedule = "45 4,10,16,22 * * *"
+  name      = "nam-ingest-trigger"
+  schedule  = "45 4,10,16,22 * * *"
   time_zone = "UTC"
 
   http_target {

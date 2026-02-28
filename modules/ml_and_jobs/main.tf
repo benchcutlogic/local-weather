@@ -65,8 +65,8 @@ resource "google_cloud_run_v2_service_iam_member" "commentary_public" {
 # EARTH ENGINE ASYNC ORCHESTRATION
 # Triggers Python GEE extraction script every 24 hours to pull RTMA verification into BQ
 resource "google_cloud_scheduler_job" "gee_verification" {
-  name     = "gee-daily-rtma-verification"
-  schedule = "0 4 * * *" # 4 AM UTC daily
+  name      = "gee-daily-rtma-verification"
+  schedule  = "0 4 * * *" # 4 AM UTC daily
   time_zone = "UTC"
 
   http_target {
@@ -78,8 +78,8 @@ resource "google_cloud_scheduler_job" "gee_verification" {
 
 # Terrain context refresh — run annually or on-demand
 resource "google_cloud_scheduler_job" "gee_terrain_refresh" {
-  name     = "gee-annual-terrain-refresh"
-  schedule = "0 6 1 1 *" # January 1st, 6 AM UTC
+  name      = "gee-annual-terrain-refresh"
+  schedule  = "0 6 1 1 *" # January 1st, 6 AM UTC
   time_zone = "UTC"
 
   http_target {
@@ -91,8 +91,8 @@ resource "google_cloud_scheduler_job" "gee_terrain_refresh" {
 
 # Commentary generation trigger — runs after each ingestion cycle
 resource "google_cloud_scheduler_job" "commentary_generation" {
-  name     = "commentary-generation-trigger"
-  schedule = "0 5,11,17,23 * * *" # 1 hour after each GFS cycle
+  name      = "commentary-generation-trigger"
+  schedule  = "0 5,11,17,23 * * *" # 1 hour after each GFS cycle
   time_zone = "UTC"
 
   http_target {

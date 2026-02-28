@@ -45,7 +45,7 @@ resource "google_bigquery_table" "model_drift_view" {
 
   view {
     use_legacy_sql = false
-    query = <<EOF
+    query          = <<EOF
       SELECT 
         city_slug, model_name, valid_time, run_time, 
         temperature_2m,
@@ -119,7 +119,7 @@ resource "google_bigquery_table" "verification_scores_view" {
 
   view {
     use_legacy_sql = false
-    query = <<EOF
+    query          = <<EOF
       SELECT
         f.city_slug,
         f.model_name,
