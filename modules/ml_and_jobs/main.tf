@@ -1,6 +1,9 @@
 variable "project_id" {}
 variable "region" {}
 variable "bq_dataset_id" {}
+variable "cities_json" {
+  default = "{}"
+}
 
 resource "google_service_account" "ml_sa" {
   account_id   = "llm-and-gee-sa"
@@ -81,6 +84,10 @@ resource "google_cloud_run_v2_service" "llm_commentary" {
       env {
         name  = "GCP_PROJECT"
         value = var.project_id
+      }
+      env {
+        name  = "CITIES_CONFIG"
+        value = var.cities_json
       }
       env {
         name  = "COMMENTARY_BUCKET"

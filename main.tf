@@ -30,6 +30,7 @@ module "ml_and_jobs" {
   project_id    = var.gcp_project_id
   region        = var.gcp_region
   bq_dataset_id = module.analytics.dataset_id
+  cities_json   = jsonencode(var.cities)
 
   depends_on = [google_project_service.apis]
 }
