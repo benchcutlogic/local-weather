@@ -2,6 +2,10 @@ variable "project_id" {}
 variable "region" {}
 variable "bq_dataset_id" {}
 variable "cities_json" {}
+variable "enable_noaa_pubsub_subscription" {
+  type    = bool
+  default = false
+}
 
 resource "google_artifact_registry_repository" "wx_repo" {
   location      = var.region
@@ -62,6 +66,8 @@ resource "google_cloud_run_v2_service_iam_member" "pubsub_invoker" {
 
 # Wire NOAA's Public HRRR Pub/Sub directly to our Cloud Run service
 resource "google_pubsub_subscription" "noaa_hrrr_trigger" {
+  count = var.enable_noaa_pubsub_subscription ? 1 : 0
+
   name  = "noaa-hrrr-trigger"
   topic = "projects/gcp-public-data-weather/topics/gcp-public-data-weather-noaa-hrrr"
 
