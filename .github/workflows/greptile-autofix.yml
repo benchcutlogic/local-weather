@@ -33,6 +33,7 @@ jobs:
         if: steps.loop_guard.outputs.skip != 'true'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: greptile-apps,greptile-apps[bot]
           prompt: |
             Review and selectively fix Greptile comments on PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
 
