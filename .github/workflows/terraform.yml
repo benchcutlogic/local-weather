@@ -1,17 +1,20 @@
 name: Terraform
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "*.tf"
       - "modules/**/*.tf"
       - "terraform.tfvars"
+      - ".github/workflows/terraform.yml"
   push:
     branches: [main]
     paths:
       - "*.tf"
       - "modules/**/*.tf"
       - "terraform.tfvars"
+      - ".github/workflows/terraform.yml"
 
 permissions:
   contents: read
@@ -30,9 +33,9 @@ jobs:
     steps:
       - id: check
         run: |
-          if [[ -z "${{ secrets.GCP_PROJECT_NUMBER }}" || -z "${{ secrets.GCP_PROJECT_ID }}" ]]; then
+          if [[ -z "${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}" || -z "${{ secrets.TERRAFORM_SERVICE_ACCOUNT }}" || -z "${{ secrets.GCP_PROJECT_ID }}" ]]; then
             echo "ready=false" >> $GITHUB_OUTPUT
-            echo "⚠️ GCP secrets not configured — skipping Terraform jobs"
+            echo "⚠️ Required GCP auth secrets not configured — skipping Terraform jobs"
           else
             echo "ready=true" >> $GITHUB_OUTPUT
           fi
@@ -50,8 +53,8 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: "projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-          service_account: "terraform-ci@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com"
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SERVICE_ACCOUNT }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -104,8 +107,8 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: "projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-          service_account: "terraform-ci@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com"
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SERVICE_ACCOUNT }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
