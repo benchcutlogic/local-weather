@@ -14,11 +14,10 @@ resource "google_artifact_registry_repository" "wx_repo" {
   format        = "DOCKER"
 }
 
-resource "google_artifact_registry_repository_iam_member" "deploy_ci_writer" {
-  location   = google_artifact_registry_repository.wx_repo.location
-  repository = google_artifact_registry_repository.wx_repo.repository_id
-  role       = "roles/artifactregistry.writer"
-  member     = "serviceAccount:${var.deploy_service_account_email}"
+resource "google_project_iam_member" "deploy_ci_writer" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${var.deploy_service_account_email}"
 }
 
 resource "google_service_account" "ingest_sa" {
