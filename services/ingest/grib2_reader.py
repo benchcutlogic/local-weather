@@ -255,17 +255,22 @@ async def read_grib2_for_cities(
             # Read each variable's byte range
             var_data: dict[str, xr.Dataset] = {}
 
+            import requests as _requests
+            import tempfile
+            import os
+
             for var_key, (start, end) in byte_ranges.items():
                 try:
-                    with fsspec.open(grib2_url, "rb") as f:
-                        f.seek(start)
-                        if end is not None:
-                            data = f.read(end - start)
-                        else:
-                            data = f.read()
+                    # Use HTTP Range header — fsspec doesn't do real range requests for http://
+                    range_header = f"bytes={start}-{end - 1}" if end is not None else f"bytes={start}-"
+                    resp = _requests.get(grib2_url, headers={"Range": range_header}, timeout=60)
+                    resp.raise_for_status()
+                    if resp.status_code not in (200, 206):
+                        logger.warning("Unexpected HTTP %s for range %s on %s", resp.status_code, range_header, grib2_url)
+                        continue
+                    data = resp.content
 
-                    # Write temp bytes and open with xarray
-                    import tempfile
+                    # Write bytes to temp file and decode with cfgrib
                     with tempfile.NamedTemporaryFile(suffix=".grib2", delete=False) as tmp:
                         tmp.write(data)
                         tmp_path = tmp.name
@@ -279,9 +284,8 @@ async def read_grib2_for_cities(
                         ds.load()  # materialize before removing temp file
                         var_data[var_key] = ds
                     except Exception as e:
-                        logger.warning("Failed to decode %s for %s: %s", var_key, grib2_url, e)
+                        logger.warning("Failed to decode %s for %s: %r", var_key, grib2_url, e)
                     finally:
-                        import os
                         os.unlink(tmp_path)
 
                 except Exception as e:
