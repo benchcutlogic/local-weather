@@ -28,6 +28,12 @@ resource "google_project_iam_member" "bq_writer" {
   member  = "serviceAccount:${google_service_account.ml_sa.email}"
 }
 
+resource "google_project_iam_member" "bq_job_user" {
+  project = var.project_id
+  role    = "roles/bigquery.jobUser"
+  member  = "serviceAccount:${google_service_account.ml_sa.email}"
+}
+
 # Public commentary artifact bucket consumed by frontend static fetches
 resource "google_storage_bucket" "commentary" {
   name                        = "hyperlocal-wx-commentary"
