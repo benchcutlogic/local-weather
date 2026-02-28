@@ -10,10 +10,11 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from google.cloud import bigquery, storage
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from bq_queries import (
     get_all_city_slugs,
@@ -85,6 +86,38 @@ class GeeResponse(BaseModel):
     status: str
 
 
+class CommentaryConfidence(BaseModel):
+    level: str
+    explanation: str
+
+
+class CommentaryElevationBand(BaseModel):
+    elevation_m: int
+    elevation_ft: int
+    description: str
+
+
+class CommentaryElevationBreakdown(BaseModel):
+    summary: str
+    bands: list[CommentaryElevationBand]
+
+
+class CommentaryPayload(BaseModel):
+    city_slug: str
+    city_name: str
+    generated_at: str
+    headline: str
+    current_conditions: str
+    todays_forecast: str
+    model_analysis: str
+    elevation_breakdown: CommentaryElevationBreakdown
+    extended_outlook: str
+    confidence: CommentaryConfidence
+    best_model: str
+    alerts: list[str]
+    updated_at: str
+
+
 def _has_usable_core_values(row: dict) -> bool:
     return any(
         row.get(k) is not None
@@ -115,6 +148,48 @@ def _build_data_delay_commentary(city_slug: str, city_name: str) -> dict:
         "alerts": ["Data delay: model ingest coverage below quality threshold"],
         "updated_at": now_iso,
     }
+
+
+def _extract_json_payload(raw_response: str) -> dict[str, Any]:
+    """Parse Gemini response robustly.
+
+    Handles plain JSON, fenced JSON blocks, and extra leading/trailing text.
+    """
+    text = raw_response.strip()
+
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return json.loads(text[start : end + 1])
+
+    raise ValueError("No valid JSON object found in model response")
+
+
+def _normalize_and_validate_commentary(
+    city_slug: str,
+    city_name: str,
+    commentary_raw: dict[str, Any],
+) -> dict[str, Any]:
+    """Validate commentary payload schema and return normalized dict."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    payload = dict(commentary_raw)
+    payload["city_slug"] = city_slug
+    payload["city_name"] = city_name
+    payload.setdefault("generated_at", now_iso)
+    payload.setdefault("updated_at", payload["generated_at"])
+
+    validated = CommentaryPayload.model_validate(payload)
+    return validated.model_dump()
 
 
 async def _call_gemini(prompt: str) -> str:
@@ -217,7 +292,21 @@ async def generate_commentary(city_slug: str) -> CommentaryResponse:
         )
 
         raw_response = await _call_gemini(prompt)
-        commentary = json.loads(raw_response)
+
+        try:
+            commentary_raw = _extract_json_payload(raw_response)
+            commentary = _normalize_and_validate_commentary(
+                city_slug=city_slug,
+                city_name=city.name,
+                commentary_raw=commentary_raw,
+            )
+        except (ValueError, json.JSONDecodeError, ValidationError) as parse_err:
+            logger.warning(
+                "Commentary payload invalid for %s (%s). Falling back to data-delay payload.",
+                city_slug,
+                parse_err,
+            )
+            commentary = _build_data_delay_commentary(city_slug=city_slug, city_name=city.name)
 
         # Upload to GCS
         gcs_path = _upload_commentary_to_gcs(city_slug, commentary)
