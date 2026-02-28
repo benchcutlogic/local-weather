@@ -139,4 +139,98 @@ EOF
   }
 }
 
+# 6. GRID TILE METADATA INDEX
+resource "google_bigquery_table" "grid_tiles" {
+  dataset_id = google_bigquery_dataset.weather_core.dataset_id
+  table_id   = "grid_tiles"
+
+  time_partitioning {
+    type  = "DAY"
+    field = "valid_time"
+  }
+  clustering = ["model_name", "run_time", "tile_id"]
+
+  schema = <<EOF
+[
+  {"name": "model_name", "type": "STRING", "mode": "REQUIRED"},
+  {"name": "run_time", "type": "TIMESTAMP", "mode": "REQUIRED"},
+  {"name": "valid_time", "type": "TIMESTAMP", "mode": "REQUIRED"},
+  {"name": "tile_id", "type": "STRING", "mode": "REQUIRED"},
+  {"name": "min_lat", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "min_lon", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "max_lat", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "max_lon", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "resolution_deg", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "row_count", "type": "INTEGER", "mode": "NULLABLE"},
+  {"name": "col_count", "type": "INTEGER", "mode": "NULLABLE"},
+  {"name": "gcs_prefix", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "ingest_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "created_at", "type": "TIMESTAMP", "mode": "NULLABLE"}
+]
+EOF
+}
+
+# 7. GRID TILE FIELD INDEX
+resource "google_bigquery_table" "grid_tile_fields" {
+  dataset_id = google_bigquery_dataset.weather_core.dataset_id
+  table_id   = "grid_tile_fields"
+
+  time_partitioning {
+    type  = "DAY"
+    field = "valid_time"
+  }
+  clustering = ["model_name", "run_time", "tile_id", "field_name"]
+
+  schema = <<EOF
+[
+  {"name": "model_name", "type": "STRING", "mode": "REQUIRED"},
+  {"name": "run_time", "type": "TIMESTAMP", "mode": "REQUIRED"},
+  {"name": "valid_time", "type": "TIMESTAMP", "mode": "REQUIRED"},
+  {"name": "tile_id", "type": "STRING", "mode": "REQUIRED"},
+  {"name": "field_name", "type": "STRING", "mode": "REQUIRED"},
+  {"name": "unit", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "gcs_uri", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "compression", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "min_value", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "max_value", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "mean_value", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "null_count", "type": "INTEGER", "mode": "NULLABLE"},
+  {"name": "ingest_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "created_at", "type": "TIMESTAMP", "mode": "NULLABLE"}
+]
+EOF
+}
+
+# 8. GRID POINT SAMPLE TABLE (bounded for QA/quick map previews)
+resource "google_bigquery_table" "grid_points_sampled" {
+  dataset_id = google_bigquery_dataset.weather_core.dataset_id
+  table_id   = "grid_points_sampled"
+
+  time_partitioning {
+    type  = "DAY"
+    field = "valid_time"
+  }
+  clustering = ["model_name", "run_time", "tile_id"]
+
+  schema = <<EOF
+[
+  {"name": "model_name", "type": "STRING", "mode": "REQUIRED"},
+  {"name": "run_time", "type": "TIMESTAMP", "mode": "REQUIRED"},
+  {"name": "valid_time", "type": "TIMESTAMP", "mode": "REQUIRED"},
+  {"name": "tile_id", "type": "STRING", "mode": "REQUIRED"},
+  {"name": "city_slug", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "lat", "type": "FLOAT", "mode": "REQUIRED"},
+  {"name": "lon", "type": "FLOAT", "mode": "REQUIRED"},
+  {"name": "temperature_2m", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "precip_kg_m2", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "wind_u_10m", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "wind_v_10m", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "snow_depth", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "relative_humidity", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "ingest_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "created_at", "type": "TIMESTAMP", "mode": "NULLABLE"}
+]
+EOF
+}
+
 output "dataset_id" { value = google_bigquery_dataset.weather_core.dataset_id }
