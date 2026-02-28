@@ -75,18 +75,19 @@ jobs:
 
       - name: Build and Push
         run: |
-          docker build -t ${{ env.ARTIFACT_REGISTRY }}/grib2-parser:${{ github.sha }} \
-                        -t ${{ env.ARTIFACT_REGISTRY }}/grib2-parser:latest \
+          REGISTRY="${{ env.GCP_REGION }}-docker.pkg.dev/$(echo "${{ env.GCP_PROJECT_ID }}" | tr -d '[:space:]')/weather-services"
+          docker build -t ${REGISTRY}/grib2-parser:${{ github.sha }} \
+                        -t ${REGISTRY}/grib2-parser:latest \
                         services/ingest/
-          docker push ${{ env.ARTIFACT_REGISTRY }}/grib2-parser:${{ github.sha }}
-          docker push ${{ env.ARTIFACT_REGISTRY }}/grib2-parser:latest
+          docker push ${REGISTRY}/grib2-parser:${{ github.sha }}
+          docker push ${REGISTRY}/grib2-parser:latest
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: grib2-byte-parser
           region: ${{ env.GCP_REGION }}
-          image: ${{ env.ARTIFACT_REGISTRY }}/grib2-parser:${{ github.sha }}
+          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/weather-services/grib2-parser:${{ github.sha }}
 
   deploy-commentary:
     name: Deploy Commentary Service
@@ -109,18 +110,19 @@ jobs:
 
       - name: Build and Push
         run: |
-          docker build -t ${{ env.ARTIFACT_REGISTRY }}/llm-commentary:${{ github.sha }} \
-                        -t ${{ env.ARTIFACT_REGISTRY }}/llm-commentary:latest \
+          REGISTRY="${{ env.GCP_REGION }}-docker.pkg.dev/$(echo "${{ env.GCP_PROJECT_ID }}" | tr -d '[:space:]')/weather-services"
+          docker build -t ${REGISTRY}/llm-commentary:${{ github.sha }} \
+                        -t ${REGISTRY}/llm-commentary:latest \
                         services/commentary/
-          docker push ${{ env.ARTIFACT_REGISTRY }}/llm-commentary:${{ github.sha }}
-          docker push ${{ env.ARTIFACT_REGISTRY }}/llm-commentary:latest
+          docker push ${REGISTRY}/llm-commentary:${{ github.sha }}
+          docker push ${REGISTRY}/llm-commentary:latest
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: gemini-forecast-commentary
           region: ${{ env.GCP_REGION }}
-          image: ${{ env.ARTIFACT_REGISTRY }}/llm-commentary:${{ github.sha }}
+          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/weather-services/llm-commentary:${{ github.sha }}
 
   deploy-frontend:
     name: Deploy Frontend
@@ -138,7 +140,7 @@ jobs:
 
       - name: Install Dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm install
 
       - name: Build
         working-directory: frontend
