@@ -10,44 +10,48 @@ import json
 from datetime import datetime, timezone
 
 
-def _k_to_f(k: float | None) -> str:
+def _k_to_f(k: float | None) -> str | None:
     """Convert Kelvin to Fahrenheit, formatted."""
     if k is None:
-        return "N/A"
+        return None
     f = (k - 273.15) * 9 / 5 + 32
     return f"{f:.0f}F"
 
 
-def _ms_to_mph(ms: float | None) -> str:
+def _ms_to_mph(ms: float | None) -> str | None:
     """Convert m/s to mph, formatted."""
     if ms is None:
-        return "N/A"
+        return None
     return f"{ms * 2.237:.0f} mph"
 
 
-def _m_to_in(m: float | None) -> str:
+def _m_to_in(m: float | None) -> str | None:
     """Convert meters to inches, formatted."""
     if m is None:
-        return "N/A"
+        return None
     return f"{m * 39.3701:.1f} in"
 
 
-def _m_to_ft(m: float | None) -> str:
+def _m_to_ft(m: float | None) -> str | None:
     """Convert meters to feet, formatted."""
     if m is None:
-        return "N/A"
+        return None
     return f"{m * 3.28084:.0f} ft"
 
 
-def _kg_m2_to_in(kg: float | None) -> str:
+def _kg_m2_to_in(kg: float | None) -> str | None:
     """Convert kg/m2 (mm) precip to inches."""
     if kg is None:
-        return "N/A"
+        return None
     return f"{kg * 0.0393701:.2f} in"
 
 
 def _format_forecasts_by_model(forecasts: list[dict]) -> str:
-    """Format forecast data grouped by model for the prompt."""
+    """Format forecast data grouped by model for the prompt.
+
+    Avoid flooding the model prompt with explicit N/A values; include only available
+    metrics and annotate sparse timesteps when needed.
+    """
     if not forecasts:
         return "No forecast data available."
 
@@ -63,7 +67,6 @@ def _format_forecasts_by_model(forecasts: list[dict]) -> str:
         run_time = rows[0].get("run_time", "unknown")
         section = f"### {model_name} (run: {run_time})\n"
 
-        # Group by valid_time, show surface + elevation bands
         by_time: dict[str, list[dict]] = {}
         for row in rows:
             vt = str(row.get("valid_time", ""))
@@ -71,29 +74,47 @@ def _format_forecasts_by_model(forecasts: list[dict]) -> str:
                 by_time[vt] = []
             by_time[vt].append(row)
 
-        for vt, time_rows in list(by_time.items())[:8]:  # Limit to first 8 timesteps
+        for vt, time_rows in list(by_time.items())[:8]:
             surface = next((r for r in time_rows if r.get("elevation_band") is None), None)
             if surface:
-                section += (
-                    f"  {vt}: Temp={_k_to_f(surface.get('temperature_2m'))}, "
-                    f"Wind={_ms_to_mph(surface.get('wind_speed_10m'))}, "
-                    f"Precip={_kg_m2_to_in(surface.get('precip_kg_m2'))}, "
-                    f"Snow={_m_to_in(surface.get('snow_depth'))}, "
-                    f"Freezing={_m_to_ft(surface.get('freezing_level_m'))}, "
-                    f"CAPE={surface.get('cape', 'N/A')}, "
-                    f"RH={surface.get('relative_humidity', 'N/A')}%\n"
-                )
+                parts: list[str] = []
+                temp = _k_to_f(surface.get("temperature_2m"))
+                wind = _ms_to_mph(surface.get("wind_speed_10m"))
+                precip = _kg_m2_to_in(surface.get("precip_kg_m2"))
+                snow = _m_to_in(surface.get("snow_depth"))
+                freezing = _m_to_ft(surface.get("freezing_level_m"))
+                cape = surface.get("cape")
+                rh = surface.get("relative_humidity")
 
-            # Elevation bands
+                if temp is not None:
+                    parts.append(f"Temp={temp}")
+                if wind is not None:
+                    parts.append(f"Wind={wind}")
+                if precip is not None:
+                    parts.append(f"Precip={precip}")
+                if snow is not None:
+                    parts.append(f"Snow={snow}")
+                if freezing is not None:
+                    parts.append(f"Freezing={freezing}")
+                if cape is not None:
+                    parts.append(f"CAPE={cape}")
+                if rh is not None:
+                    parts.append(f"RH={rh}%")
+
+                if not parts:
+                    parts.append("no core fields available at this timestep")
+
+                section += f"  {vt}: " + ", ".join(parts) + "\n"
+
             elev_rows = sorted(
                 [r for r in time_rows if r.get("elevation_band") is not None],
                 key=lambda r: r.get("elevation_band", 0),
             )
             for er in elev_rows:
-                section += (
-                    f"    @{er['elevation_band']}m: "
-                    f"Temp={_k_to_f(er.get('temperature_2m'))}\n"
-                )
+                temp = _k_to_f(er.get("temperature_2m"))
+                if temp is None:
+                    continue
+                section += f"    @{er['elevation_band']}m: Temp={temp}\n"
 
         sections.append(section)
 
@@ -175,6 +196,36 @@ def _format_verification(scores: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _data_availability_summary(forecasts: list[dict]) -> str:
+    """Summarize usable data coverage per model."""
+    if not forecasts:
+        return "No forecast rows available."
+
+    per_model: dict[str, dict[str, int]] = {}
+    for row in forecasts:
+        model = row.get("model_name", "UNKNOWN")
+        m = per_model.setdefault(model, {"rows": 0, "usable": 0, "surface": 0, "surface_usable": 0})
+        m["rows"] += 1
+        usable = any(
+            row.get(k) is not None
+            for k in ("temperature_2m", "precip_kg_m2", "wind_speed_10m", "snow_depth", "relative_humidity")
+        )
+        if usable:
+            m["usable"] += 1
+        if row.get("elevation_band") is None:
+            m["surface"] += 1
+            if usable:
+                m["surface_usable"] += 1
+
+    lines = []
+    for model, stats in sorted(per_model.items()):
+        lines.append(
+            f"- {model}: rows={stats['rows']}, usable_rows={stats['usable']}, "
+            f"surface_rows={stats['surface']}, surface_usable={stats['surface_usable']}"
+        )
+    return "\n".join(lines)
+
+
 def build_commentary_prompt(
     city_slug: str,
     city_name: str,
@@ -207,6 +258,9 @@ Generate a comprehensive forecast commentary for {city_name} ({city_slug}). Incl
 
 ## Terrain Context
 {_format_terrain(terrain)}
+
+## Data Availability Summary (important)
+{_data_availability_summary(forecasts)}
 
 ## Latest Model Forecasts
 {_format_forecasts_by_model(forecasts)}
@@ -246,4 +300,11 @@ Respond with a JSON object containing these fields:
 Write naturally and engagingly. Don't just list numbers — interpret them. Say things like "the HRRR has been
 flip-flopping on snow totals" or "all models are in rare agreement on a dry weekend." Reference specific
 elevations in feet for US audiences. Mention local terrain features when relevant.
+
+Critical guardrails:
+- Do NOT claim "models are mute", "flying blind", "no usable model data", or similar unless
+  the Data Availability Summary shows zero usable rows across all models.
+- If data is partial/sparse, explicitly say which fields are available and provide a best-effort
+  forecast from those fields.
+- Avoid repeating "N/A" in prose.
 """

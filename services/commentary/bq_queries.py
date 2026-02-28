@@ -22,17 +22,41 @@ def _get_client() -> bigquery.Client:
 
 
 def get_latest_forecasts(city_slug: str) -> list[dict]:
-    """Get the latest forecast data for a city across all models."""
+    """Get latest *usable* forecast data for a city across all models.
+
+    Prefer the most recent run with non-null core metrics to avoid selecting a run
+    where every value is null (which can happen during transient ingest issues).
+    """
     client = _get_client()
     query = f"""
-    WITH latest_runs AS (
+    WITH run_quality AS (
         SELECT
             model_name,
-            MAX(run_time) AS latest_run
+            run_time,
+            COUNT(*) AS row_count,
+            COUNTIF(
+                temperature_2m IS NOT NULL
+                OR precip_kg_m2 IS NOT NULL
+                OR wind_speed_10m IS NOT NULL
+                OR snow_depth IS NOT NULL
+                OR relative_humidity IS NOT NULL
+            ) AS non_null_core_count
         FROM `{GCP_PROJECT}.{BQ_DATASET}.forecast_runs`
         WHERE city_slug = @city_slug
-            AND run_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
-        GROUP BY model_name
+            AND run_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
+        GROUP BY model_name, run_time
+    ),
+    latest_runs AS (
+        SELECT
+            model_name,
+            run_time AS latest_run
+        FROM run_quality
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY model_name
+            ORDER BY
+                (non_null_core_count > 0) DESC,
+                run_time DESC
+        ) = 1
     )
     SELECT
         f.city_slug,
