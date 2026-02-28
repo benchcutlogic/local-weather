@@ -413,15 +413,27 @@ async def read_grib2_for_cities(
                         tmp_path = tmp.name
 
                     try:
-                        ds = xr.open_dataset(
-                            tmp_path,
-                            engine="cfgrib",
-                            backend_kwargs={"indexpath": ""},
-                        )
+                        # Some cfgrib/eccodes combinations can assert on indexpath="".
+                        # Try explicit no-index path first, then fall back to defaults.
+                        try:
+                            ds = xr.open_dataset(
+                                tmp_path,
+                                engine="cfgrib",
+                                backend_kwargs={"indexpath": ""},
+                            )
+                        except AssertionError:
+                            ds = xr.open_dataset(tmp_path, engine="cfgrib")
+
                         ds.load()  # materialize before removing temp file
                         var_data[var_key] = ds
                     except Exception as e:
-                        logger.warning("Failed to decode %s for %s: %r", var_key, grib2_url, e)
+                        logger.warning(
+                            "Failed to decode %s for %s: %s: %r",
+                            var_key,
+                            grib2_url,
+                            e.__class__.__name__,
+                            e,
+                        )
                     finally:
                         os.unlink(tmp_path)
 
