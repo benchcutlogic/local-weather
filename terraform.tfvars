@@ -1,7 +1,5 @@
-gcp_project_id        = "hyperlocal-wx-prod"
-cloudflare_account_id = "your_cf_account_id"
-cloudflare_zone_id    = "your_cf_zone_id"
-base_domain           = "hyperlocalwx.com"
+gcp_project_id = "hyperlocal-wx-prod"
+base_domain    = "hyperlocalwx.com"
 
 cities = {
   "denver" = {

@@ -33,7 +33,7 @@ jobs:
     steps:
       - id: check
         run: |
-          if [[ -z "${{ vars.WORKLOAD_IDENTITY_PROVIDER }}" || -z "${{ vars.TERRAFORM_SERVICE_ACCOUNT }}" || -z "${{ secrets.GCP_PROJECT_ID }}" ]]; then
+          if [[ -z "${{ vars.WORKLOAD_IDENTITY_PROVIDER }}" || -z "${{ vars.TERRAFORM_SERVICE_ACCOUNT }}" || -z "${{ secrets.GCP_PROJECT_ID }}" || -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" || -z "${{ secrets.CLOUDFLARE_ZONE_ID }}" ]]; then
             echo "ready=false" >> $GITHUB_OUTPUT
             echo "⚠️ Required GCP auth secrets not configured — skipping Terraform jobs"
           else
@@ -76,6 +76,8 @@ jobs:
         run: terraform plan -no-color -out=tfplan
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TF_VAR_cloudflare_zone_id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
 
       - name: Comment Plan on PR
         if: always() && github.event_name == 'pull_request'
@@ -129,3 +131,5 @@ jobs:
         run: terraform apply -auto-approve
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TF_VAR_cloudflare_zone_id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
