@@ -78,21 +78,26 @@ jobs:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Comment Plan on PR
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
         uses: actions/github-script@v7
-        if: always()
+        env:
+          PLAN_TEXT: ${{ steps.plan.outputs.stdout }}
         with:
           script: |
-            const output = `#### Terraform Plan
-            \`\`\`
-            ${{ steps.plan.outputs.stdout }}
-            \`\`\`
-            *Triggered by @${{ github.actor }}*`;
+            const body = [
+              '#### Terraform Plan',
+              '```',
+              process.env.PLAN_TEXT || '(no plan output captured)',
+              '```',
+              `*Triggered by @${context.actor}*`
+            ].join('\n').slice(0, 65536);
 
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: output.substring(0, 65536)
+              body,
             });
 
   apply:
