@@ -62,8 +62,16 @@ def _parse_idx_file(idx_content: str) -> list[dict]:
             if len(next_parts) >= 2:
                 end_offset = int(next_parts[1])
 
+        # Some idx variants (observed on NAM) can emit non-integer sequence ids like
+        # "8.1" in the first field. We don't rely on this id downstream, so coerce
+        # safely instead of failing the whole forecast hour.
+        try:
+            entry_index = int(float(parts[0]))
+        except ValueError:
+            entry_index = i + 1
+
         entries.append({
-            "index": int(parts[0]),
+            "index": entry_index,
             "offset": offset,
             "end_offset": end_offset,
             "date_str": date_str,
