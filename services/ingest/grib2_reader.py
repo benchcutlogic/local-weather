@@ -276,6 +276,7 @@ async def read_grib2_for_cities(
                             engine="cfgrib",
                             backend_kwargs={"indexpath": ""},
                         )
+                        ds.load()  # materialize before removing temp file
                         var_data[var_key] = ds
                     except Exception as e:
                         logger.warning("Failed to decode %s for %s: %s", var_key, grib2_url, e)
