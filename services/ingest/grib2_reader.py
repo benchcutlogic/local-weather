@@ -103,46 +103,49 @@ def _parse_idx_file(idx_content: str) -> list[dict]:
 
 
 def _match_idx_entry(entry: dict, var_config: dict) -> bool:
-    """Check if an idx entry matches a desired variable config."""
+    """Check if an idx entry matches a desired variable config.
+
+    Level matching must be precise: "2 m above ground" != "2 mb" (millibar).
+    The substring "2 m" would incorrectly match the pressure-level entry "2 mb",
+    resulting in cfgrib receiving a stratospheric GRIB message with wrong structure.
+    """
     var_name = entry["var_name"]
-    level = entry["level"]
+    level = entry["level"].strip()
 
     short_name = var_config["shortName"]
     type_of_level = var_config.get("typeOfLevel", "")
+    level_str = str(var_config.get("level", ""))
 
-    # Map shortName to common idx variable names
-    name_map = {
-        "2t": ["TMP", "TMP:2 m"],
-        "10u": ["UGRD", "UGRD:10 m"],
-        "10v": ["VGRD", "VGRD:10 m"],
+    # Canonical var name in .idx files
+    name_map: dict[str, list[str]] = {
+        "2t": ["TMP"],
+        "10u": ["UGRD"],
+        "10v": ["VGRD"],
         "tp": ["APCP", "PRATE"],
         "sde": ["SNOD"],
-        "0deg": ["HGT:0C isotherm", "HGT"],
+        "0deg": ["HGT"],
         "cape": ["CAPE"],
-        "2r": ["RH", "RH:2 m"],
+        "2r": ["RH"],
     }
-
     expected_names = name_map.get(short_name, [short_name])
 
-    for name in expected_names:
-        if ":" in name:
-            n, l = name.split(":", 1)
-            if var_name == n and l in level:
-                return True
-        elif var_name == name:
-            # Check level match
-            level_str = var_config.get("level", "")
-            if type_of_level == "heightAboveGround" and level_str:
-                if f"{level_str} m" in level:
-                    return True
-            elif type_of_level == "surface" and "surface" in level.lower():
-                return True
-            elif type_of_level == "isothermZero" and "0C" in level:
-                return True
-            elif not level_str:
-                return True
+    if var_name not in expected_names:
+        return False
 
-    return False
+    # Precise level matching based on typeOfLevel —
+    # avoids false matches like "2 m" matching "2 mb" (millibar pressure level)
+    if type_of_level == "heightAboveGround" and level_str:
+        # Must contain both the numeric height AND "above ground" to exclude mb levels
+        return f"{level_str} m above ground" in level
+
+    if type_of_level == "surface":
+        return "surface" in level.lower()
+
+    if type_of_level == "isothermZero":
+        return "0C" in level or "isotherm" in level.lower()
+
+    # Fallback: no level constraint
+    return True
 
 
 def _find_byte_ranges(idx_content: str) -> dict[str, tuple[int, int | None]]:
@@ -393,20 +396,14 @@ async def read_grib2_for_cities(
                     range_header = f"bytes={start}-{end - 1}" if end is not None else f"bytes={start}-"
                     resp = _requests.get(
                         grib2_url,
-                        headers={
-                            "Range": range_header,
-                            # Critical for byte-accurate GRIB slices: avoid transfer/content decoding.
-                            "Accept-Encoding": "identity",
-                        },
+                        headers={"Range": range_header},
                         timeout=60,
-                        stream=True,
                     )
                     resp.raise_for_status()
-                    if resp.status_code != 206:
-                        logger.warning("Expected HTTP 206 for range %s on %s, got %s", range_header, grib2_url, resp.status_code)
+                    if resp.status_code not in (200, 206):
+                        logger.warning("Unexpected HTTP %s for range %s on %s", resp.status_code, range_header, grib2_url)
                         continue
-                    resp.raw.decode_content = False
-                    data = resp.raw.read()
+                    data = resp.content
 
                     # Write bytes to temp file and decode with cfgrib
                     with tempfile.NamedTemporaryFile(suffix=".grib2", delete=False) as tmp:
