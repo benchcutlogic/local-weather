@@ -15,6 +15,15 @@ class CityConfig:
     elev_bands: list[int] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class AoiConfig:
+    name: str
+    min_lat: float
+    min_lon: float
+    max_lat: float
+    max_lon: float
+
+
 def load_cities() -> dict[str, CityConfig]:
     """Load city configs from CITIES_CONFIG env var (JSON)."""
     raw = os.environ.get("CITIES_CONFIG", "{}")
@@ -28,6 +37,31 @@ def load_cities() -> dict[str, CityConfig]:
             elev_bands=info.get("elev_bands", info.get("elevation_bands", [])),
         )
     return cities
+
+
+def load_aois() -> dict[str, AoiConfig]:
+    """Load AOIs from AOI_CONFIG JSON env var or use a La Plata County default."""
+    default_aois = {
+        "la-plata-county": {
+            "name": "La Plata County, CO",
+            "min_lat": 37.00,
+            "min_lon": -108.35,
+            "max_lat": 37.50,
+            "max_lon": -107.45,
+        }
+    }
+    raw = os.environ.get("AOI_CONFIG", json.dumps(default_aois))
+    data = json.loads(raw)
+    aois: dict[str, AoiConfig] = {}
+    for slug, info in data.items():
+        aois[slug] = AoiConfig(
+            name=info["name"],
+            min_lat=info["min_lat"],
+            min_lon=info["min_lon"],
+            max_lat=info["max_lat"],
+            max_lon=info["max_lon"],
+        )
+    return aois
 
 
 # NOAA GCS bucket paths for each model

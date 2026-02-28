@@ -17,7 +17,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from bigquery_writer import write_forecast_points
-from config import load_cities, CityConfig
+from config import AoiConfig, CityConfig, load_aois, load_cities
 from grib2_reader import (
     get_default_forecast_hours,
     get_latest_run_time,
@@ -31,13 +31,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 CITIES: dict[str, CityConfig] = {}
+AOIS: dict[str, AoiConfig] = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global CITIES
+    global CITIES, AOIS
     CITIES = load_cities()
+    AOIS = load_aois()
     logger.info("Loaded %d cities: %s", len(CITIES), list(CITIES.keys()))
+    logger.info("Loaded %d AOIs: %s", len(AOIS), list(AOIS.keys()))
     yield
 
 
@@ -91,8 +94,14 @@ async def _run_ingestion(
         len(CITIES),
     )
 
-    points = await read_grib2_for_cities(model, run_time, forecast_hours, CITIES)
-    rows_written = await write_forecast_points(points, CITIES)
+    points, grid_samples = await read_grib2_for_cities(
+        model,
+        run_time,
+        forecast_hours,
+        CITIES,
+        AOIS,
+    )
+    rows_written = await write_forecast_points(points, CITIES, grid_samples)
 
     logger.info(
         "Completed %s ingestion: %d points extracted, %d rows written",
