@@ -216,6 +216,19 @@ def _normalize_lon(lon: float) -> float:
     return ((lon + 180) % 360) - 180
 
 
+def _aoi_target_points(aoi: AoiConfig, resolution_deg: float = 0.25) -> list[tuple[float, float]]:
+    """Generate a list of (lat, lon) sample points covering an AOI at the given resolution."""
+    lat = aoi.min_lat
+    points: list[tuple[float, float]] = []
+    while lat <= aoi.max_lat + 1e-9:
+        lon = aoi.min_lon
+        while lon <= aoi.max_lon + 1e-9:
+            points.append((round(lat, 4), round(lon, 4)))
+            lon = round(lon + resolution_deg, 4)
+        lat = round(lat + resolution_deg, 4)
+    return points
+
+
 def _extract_aoi_grid_samples(
     var_data: dict[str, xr.Dataset],
     aoi_slug: str,
@@ -224,54 +237,41 @@ def _extract_aoi_grid_samples(
     run_time: datetime,
     valid_time: datetime,
 ) -> list[GridSamplePoint]:
-    """Extract all available grid cells inside an AOI bounding box."""
-    if "temperature_2m" not in var_data:
+    """Extract forecast values for all grid points inside an AOI bounding box.
+
+    Uses pre-generated target points at model resolution and `_extract_nearest_value`
+    for each — same method used for city extraction, fully compatible with cfgrib.
+    """
+    if not var_data:
         return []
 
-    ref_ds = var_data["temperature_2m"]
-    lat_coord = next((c for c in ref_ds.coords if "lat" in c.lower()), None)
-    lon_coord = next((c for c in ref_ds.coords if "lon" in c.lower()), None)
-    if lat_coord is None or lon_coord is None:
-        return []
-
-    lats = np.asarray(ref_ds[lat_coord].values)
-    lons_raw = np.asarray(ref_ds[lon_coord].values)
-
-    # Build index mask in normalized lon space
-    lons_norm = np.vectorize(_normalize_lon)(lons_raw)
-    lat_idx = np.where((lats >= aoi.min_lat) & (lats <= aoi.max_lat))[0]
-    lon_idx = np.where((lons_norm >= aoi.min_lon) & (lons_norm <= aoi.max_lon))[0]
-
-    if len(lat_idx) == 0 or len(lon_idx) == 0:
+    target_points = _aoi_target_points(aoi)
+    if not target_points:
         return []
 
     samples: list[GridSamplePoint] = []
-    for i in lat_idx:
-        for j in lon_idx:
-            lat = float(lats[i])
-            lon = float(lons_norm[j])
+    for lat, lon in target_points:
+        t = _extract_nearest_value(var_data["temperature_2m"], lat, lon, "t2m") if "temperature_2m" in var_data else None
+        p = _extract_nearest_value(var_data["precip"], lat, lon, "tp") if "precip" in var_data else None
+        u = _extract_nearest_value(var_data["wind_u_10m"], lat, lon, "u10") if "wind_u_10m" in var_data else None
+        v = _extract_nearest_value(var_data["wind_v_10m"], lat, lon, "v10") if "wind_v_10m" in var_data else None
+        s = _extract_nearest_value(var_data["snow_depth"], lat, lon, "sde") if "snow_depth" in var_data else None
+        rh = _extract_nearest_value(var_data["relative_humidity"], lat, lon, "r2") if "relative_humidity" in var_data else None
 
-            t = _extract_nearest_value(var_data["temperature_2m"], lat, lon, "t2m") if "temperature_2m" in var_data else None
-            p = _extract_nearest_value(var_data["precip"], lat, lon, "tp") if "precip" in var_data else None
-            u = _extract_nearest_value(var_data["wind_u_10m"], lat, lon, "u10") if "wind_u_10m" in var_data else None
-            v = _extract_nearest_value(var_data["wind_v_10m"], lat, lon, "v10") if "wind_v_10m" in var_data else None
-            s = _extract_nearest_value(var_data["snow_depth"], lat, lon, "sde") if "snow_depth" in var_data else None
-            rh = _extract_nearest_value(var_data["relative_humidity"], lat, lon, "r2") if "relative_humidity" in var_data else None
-
-            samples.append(GridSamplePoint(
-                aoi_slug=aoi_slug,
-                model_name=model.upper(),
-                run_time=run_time.replace(tzinfo=timezone.utc),
-                valid_time=valid_time,
-                lat=lat,
-                lon=lon,
-                temperature_2m=t,
-                precip_kg_m2=p,
-                wind_u_10m=u,
-                wind_v_10m=v,
-                snow_depth=s,
-                relative_humidity=rh,
-            ))
+        samples.append(GridSamplePoint(
+            aoi_slug=aoi_slug,
+            model_name=model.upper(),
+            run_time=run_time.replace(tzinfo=timezone.utc),
+            valid_time=valid_time,
+            lat=lat,
+            lon=lon,
+            temperature_2m=t,
+            precip_kg_m2=p,
+            wind_u_10m=u,
+            wind_v_10m=v,
+            snow_depth=s,
+            relative_humidity=rh,
+        ))
 
     logger.info(
         "Extracted %d AOI grid samples for %s (%s) at valid_time=%s",
