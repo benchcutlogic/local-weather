@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import { metersToFeet } from '$lib/cities';
   import MicroclimateMap from '$lib/components/organisms/MicroclimateMap.svelte';
+  import { trackToneSelected, trackChangesViewed } from '$lib/analytics/cityPage';
 
   type Tone = 'professional' | 'friendly' | 'spicy';
 
@@ -21,7 +22,24 @@
     spicy: 'Spicy'
   };
 
-  let selectedTone = $derived((page.url.searchParams.get('tone') as Tone) || 'professional');
+  function storedTone(): Tone | null {
+    if (!browser) return null;
+    try {
+      const v = window.localStorage.getItem('wx:tone');
+      if (v === 'professional' || v === 'friendly' || v === 'spicy') return v;
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  let selectedTone = $derived(
+    (page.url.searchParams.get('tone') as Tone) || storedTone() || 'professional'
+  );
+
+  $effect(() => {
+    if (!browser) return;
+    try { window.localStorage.setItem('wx:tone', selectedTone); } catch { /* ignore */ }
+    trackToneSelected(data.citySlug, selectedTone);
+  });
   let daypartSummary = $derived(dayparts(data.commentary));
   let changes: string[] = $state([]);
 
@@ -61,14 +79,71 @@
       .replace(/\belevated\b/gi, 'spicy');
   }
 
-  function riskLabel(commentary: (typeof data.commentary) | null): string {
-    if (!commentary) return 'No risk signal yet';
+  type RiskLevel = 'Low' | 'Watch' | 'Elevated' | 'High';
+
+  function riskLevel(commentary: (typeof data.commentary) | null): RiskLevel {
+    if (!commentary) return 'Low';
     const confidence = commentary.confidence.level;
     const alerts = commentary.alerts?.length || 0;
+    if (alerts >= 3 || (alerts >= 2 && confidence === 'low')) return 'High';
+    if (alerts >= 2 || confidence === 'low') return 'Elevated';
+    if (alerts === 1 || confidence === 'moderate') return 'Watch';
+    return 'Low';
+  }
 
-    if (alerts >= 2 || confidence === 'low') return 'Elevated risk';
-    if (alerts === 1 || confidence === 'moderate') return 'Watch conditions';
+  function riskLabel(commentary: (typeof data.commentary) | null): string {
+    if (!commentary) return 'No risk signal yet';
+    const level = riskLevel(commentary);
+    if (level === 'High' || level === 'Elevated') return 'Elevated risk';
+    if (level === 'Watch') return 'Watch conditions';
     return 'Low operational risk';
+  }
+
+  let currentRisk = $derived(riskLevel(data.commentary));
+
+  function modelDisagreementLabel(): string | null {
+    if (!data.dataTrust?.models?.length) return null;
+    const coverages = data.dataTrust.models.map(
+      (m: { usable_rows: number; total_rows: number }) =>
+        m.total_rows > 0 ? m.usable_rows / m.total_rows : 0
+    );
+    const lowest = Math.min(...coverages);
+    if (lowest < 0.60) return 'High model disagreement';
+    if (coverages.every((c: number) => c >= 0.80)) return 'Models agree';
+    return 'Moderate model spread';
+  }
+
+  let disagreementLabel = $derived(modelDisagreementLabel());
+
+  function windowStatus(daypart: 'am' | 'pm' | 'night'): 'stable' | 'watch' | 'critical' {
+    if (daypart === 'pm' && (currentRisk === 'Elevated' || currentRisk === 'High')) return 'critical';
+    if (currentRisk === 'Watch') return 'watch';
+    if (currentRisk === 'Elevated' || currentRisk === 'High') return 'watch';
+    return 'stable';
+  }
+
+  const statusColors: Record<string, string> = {
+    stable: 'bg-green-100 text-green-800',
+    watch: 'bg-yellow-100 text-yellow-800',
+    critical: 'bg-red-100 text-red-800'
+  };
+
+  function playbookItems(audience: 'residents' | 'race_organizers' | 'crews'): string[] {
+    const level = currentRisk;
+    if (audience === 'residents') {
+      if (level === 'High') return ['Stay indoors during peak hours', 'Monitor emergency channels', 'Secure outdoor items'];
+      if (level === 'Elevated' || level === 'Watch') return ['Check forecasts before outdoor plans', 'Allow extra travel time'];
+      return ['Normal outdoor activities OK', 'Stay hydrated'];
+    }
+    if (audience === 'race_organizers') {
+      if (level === 'High') return ['Consider postponement', 'Brief all staff on safety plan', 'Stage medical resources'];
+      if (level === 'Elevated' || level === 'Watch') return ['Review course hazard points', 'Prepare contingency schedule'];
+      return ['Routine event prep', 'Confirm aid station staffing'];
+    }
+    // crews
+    if (level === 'High') return ['Suspend non-essential field work', 'Recall crews from exposed areas', 'Check emergency gear'];
+    if (level === 'Elevated' || level === 'Watch') return ['Shorten outdoor shifts', 'Monitor conditions hourly'];
+    return ['Standard operations', 'Hydration and sun protection'];
   }
 
   function dayparts(commentary: (typeof data.commentary) | null): { am: string; pm: string; night: string } {
@@ -77,6 +152,14 @@
         am: 'No morning guidance yet.',
         pm: 'No afternoon guidance yet.',
         night: 'No evening guidance yet.'
+      };
+    }
+
+    if (commentary.dayparts) {
+      return {
+        am: commentary.dayparts.am || 'Morning trend is still stabilizing.',
+        pm: commentary.dayparts.pm || 'Afternoon model spread is still coming in.',
+        night: commentary.dayparts.night || 'Evening trend guidance is limited right now.'
       };
     }
 
@@ -93,6 +176,13 @@
 
   $effect(() => {
     if (!browser || !data.commentary) return;
+
+    // #57: prefer structured changes payload when present
+    if (data.commentary.changes && data.commentary.changes.length > 0) {
+      changes = data.commentary.changes;
+      if (changes.length > 0) trackChangesViewed(data.citySlug, changes.length);
+      return;
+    }
 
     const key = `wx:last:${data.citySlug}`;
     const current = {
@@ -126,6 +216,7 @@
       }
 
       changes = nextChanges;
+      if (changes.length > 0) trackChangesViewed(data.citySlug, changes.length);
       window.localStorage.setItem(key, JSON.stringify(current));
     } catch {
       changes = [];
@@ -171,6 +262,7 @@
         {#each Object.entries(toneLabels) as [tone, label]}
           <a
             href={`?tone=${tone}`}
+            onclick={() => { try { window.localStorage.setItem('wx:tone', tone); } catch { /* ignore */ } }}
             class={`px-3 py-1.5 rounded-full text-sm border transition ${
               selectedTone === tone
                 ? 'bg-wx-700 text-white border-wx-700'
@@ -204,6 +296,29 @@
     </article>
   </section>
 
+  {#if disagreementLabel}
+    <div class="flex justify-center mb-6">
+      <span class="px-3 py-1 rounded-full text-xs font-medium border {
+        disagreementLabel === 'Models agree'
+          ? 'bg-green-50 text-green-700 border-green-200'
+          : disagreementLabel === 'Moderate model spread'
+            ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+            : 'bg-red-50 text-red-700 border-red-200'
+      }">{disagreementLabel}</span>
+    </div>
+  {/if}
+
+  {#if data.commentary.alerts && data.commentary.alerts.length > 0}
+    <section class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+      <h2 class="text-sm font-bold text-amber-900 mb-2">Active Alerts</h2>
+      <ul class="space-y-1 text-sm text-amber-800">
+        {#each data.commentary.alerts as alert}
+          <li class="pl-3 border-l-2 border-amber-300">{toneText(alert, selectedTone)}</li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
   <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6 mb-6">
     <h2 class="text-lg font-bold text-wx-900 mb-3">What changed since last update?</h2>
     {#if changes.length === 0}
@@ -234,6 +349,36 @@
           <p><span class="font-semibold text-wx-900">AM:</span> {toneText(daypartSummary.am, selectedTone)}</p>
           <p><span class="font-semibold text-wx-900">PM:</span> {toneText(daypartSummary.pm, selectedTone)}</p>
           <p><span class="font-semibold text-wx-900">Night:</span> {toneText(daypartSummary.night, selectedTone)}</p>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
+        <h2 class="text-lg font-bold text-wx-900 mb-3">Action Windows</h2>
+        <div class="space-y-2">
+          {#each [{ key: 'am' as const, label: 'AM', time: '6 AM – 12 PM' }, { key: 'pm' as const, label: 'PM', time: '12 PM – 6 PM' }, { key: 'night' as const, label: 'Night', time: '6 PM – 6 AM' }] as window}
+            {@const status = windowStatus(window.key)}
+            <div class="flex items-center gap-3 py-2 {window.key !== 'night' ? 'border-b border-wx-100' : ''}">
+              <span class="font-mono text-xs font-semibold text-wx-500 min-w-[90px]">{window.time}</span>
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium {statusColors[status]}">{status === 'critical' ? 'critical window' : status}</span>
+              <span class="text-sm text-wx-700 flex-1">{toneText(daypartSummary[window.key], selectedTone)}</span>
+            </div>
+          {/each}
+        </div>
+      </section>
+
+      <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
+        <h2 class="text-lg font-bold text-wx-900 mb-3">Ops Playbook</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {#each [{ key: 'residents' as const, label: 'Residents' }, { key: 'race_organizers' as const, label: 'Race Organizers' }, { key: 'crews' as const, label: 'Crews' }] as audience}
+            <div>
+              <h3 class="text-xs uppercase tracking-wide text-wx-500 mb-2">{audience.label}</h3>
+              <ul class="space-y-1 text-sm text-wx-700">
+                {#each playbookItems(audience.key) as item}
+                  <li class="pl-2 border-l-2 border-wx-200">{item}</li>
+                {/each}
+              </ul>
+            </div>
+          {/each}
         </div>
       </section>
 
