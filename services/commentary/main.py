@@ -118,6 +118,12 @@ class CommentaryElevationBreakdown(BaseModel):
     bands: list[CommentaryElevationBand]
 
 
+class HorizonConfidence(BaseModel):
+    immediate_0_6h: str
+    short_6_48h: str
+    extended_48h_plus: str
+
+
 class CommentaryPayload(BaseModel):
     city_slug: str
     city_name: str
@@ -130,6 +136,7 @@ class CommentaryPayload(BaseModel):
     extended_outlook: str
     confidence: CommentaryConfidence
     best_model: str
+    horizon_confidence: HorizonConfidence
     alerts: list[str]
     updated_at: str
 
@@ -161,6 +168,11 @@ def _build_data_delay_commentary(city_slug: str, city_name: str) -> dict:
             "explanation": "Confidence is low because the latest model ingest does not yet contain enough usable fields.",
         },
         "best_model": "Unavailable (insufficient current data)",
+        "horizon_confidence": {
+            "immediate_0_6h": "Low confidence: near-term model inputs currently delayed.",
+            "short_6_48h": "Low confidence: short-range blend unavailable until ingest recovers.",
+            "extended_48h_plus": "Low confidence: extended trend withheld due upstream data delay.",
+        },
         "alerts": ["Data delay: model ingest coverage below quality threshold"],
         "updated_at": now_iso,
     }
@@ -203,6 +215,14 @@ def _normalize_and_validate_commentary(
     payload["city_name"] = city_name
     payload.setdefault("generated_at", now_iso)
     payload.setdefault("updated_at", payload["generated_at"])
+    payload.setdefault(
+        "horizon_confidence",
+        {
+            "immediate_0_6h": "Moderate confidence based on available near-term model coverage.",
+            "short_6_48h": "Moderate confidence from blended short-range guidance.",
+            "extended_48h_plus": "Lower confidence expected for longer-range trend framing.",
+        },
+    )
 
     validated = CommentaryPayload.model_validate(payload)
     return validated.model_dump()
