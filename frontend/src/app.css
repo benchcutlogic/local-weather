@@ -1,0 +1,30 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --color-wx-50: #f0f7ff;
+  --color-wx-100: #e0effe;
+  --color-wx-200: #b9dffd;
+  --color-wx-300: #7cc5fc;
+  --color-wx-400: #36a8f8;
+  --color-wx-500: #0c8de9;
+  --color-wx-600: #006fc7;
+  --color-wx-700: #0159a1;
+  --color-wx-800: #064b85;
+  --color-wx-900: #0b3f6e;
+  --color-wx-950: #07284a;
+
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
+
+:root {
+  color: var(--color-wx-900);
+  background: var(--color-wx-50);
+}
+
+body {
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  background: linear-gradient(to bottom right, #f0f7ff 0%, #ffffff 40%, #e0effe 100%);
+}

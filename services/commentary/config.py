@@ -12,7 +12,14 @@ class CityConfig:
     name: str
     lat: float
     lon: float
+    state: str | None = None
+    aliases: list[str] = field(default_factory=list)
+    timezone: str = "America/Denver"
     elev_bands: list[int] = field(default_factory=list)
+    terrain_profile: str | None = None
+    seasonal_hazards: list[str] = field(default_factory=list)
+    alert_thresholds: dict[str, float] = field(default_factory=dict)
+    branding: dict[str, str] = field(default_factory=dict)
 
 
 def load_cities() -> dict[str, CityConfig]:
@@ -25,7 +32,14 @@ def load_cities() -> dict[str, CityConfig]:
             name=info["name"],
             lat=info["lat"],
             lon=info["lon"],
+            state=info.get("state"),
+            aliases=info.get("aliases", []),
+            timezone=info.get("timezone", "America/Denver"),
             elev_bands=info.get("elev_bands", info.get("elevation_bands", [])),
+            terrain_profile=info.get("terrain_profile"),
+            seasonal_hazards=info.get("seasonal_hazards", []),
+            alert_thresholds=info.get("alert_thresholds", {}),
+            branding=info.get("branding", {}),
         )
     return cities
 

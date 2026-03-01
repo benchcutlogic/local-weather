@@ -20,7 +20,7 @@ export interface Commentary {
   };
   extended_outlook: string;
   confidence: {
-    level: "high" | "moderate" | "low";
+    level: 'high' | 'moderate' | 'low';
     explanation: string;
   };
   best_model: string;
@@ -38,19 +38,12 @@ export interface CrowdReport {
   lon?: number;
 }
 
-const GCS_BASE =
-  import.meta.env.GCS_COMMENTARY_BASE ||
-  "https://storage.googleapis.com/hyperlocal-wx-commentary";
-
-const API_BASE =
-  import.meta.env.COMMENTARY_API_URL || "";
-
 export type CommentaryFetchState =
-  | "ok"
-  | "missing"
-  | "not_found"
-  | "stale"
-  | "error";
+  | 'ok'
+  | 'missing'
+  | 'not_found'
+  | 'stale'
+  | 'error';
 
 export interface CommentaryFetchResult {
   commentary: Commentary | null;
@@ -69,51 +62,68 @@ export interface DataTrustModel {
 
 export interface DataTrustResponse {
   city_slug: string;
-  status: "ok" | "missing";
+  status: 'ok' | 'missing';
   generated_at: string;
   models: DataTrustModel[];
 }
 
 export async function fetchCommentary(
   citySlug: string,
+  options?: { gcsBase?: string }
 ): Promise<CommentaryFetchResult> {
+  const gcsBase =
+    options?.gcsBase ||
+    'https://storage.googleapis.com/hyperlocal-wx-commentary';
+
   try {
-    const res = await fetch(`${GCS_BASE}/${citySlug}/latest.json`, {
-      headers: { Accept: "application/json" },
+    const res = await fetch(`${gcsBase}/${citySlug}/latest.json`, {
+      headers: { Accept: 'application/json' }
     });
 
     if (!res.ok) {
       if (res.status === 404) {
-        return { commentary: null, state: "not_found", lastUpdated: null, statusCode: 404 };
+        return {
+          commentary: null,
+          state: 'not_found',
+          lastUpdated: null,
+          statusCode: 404
+        };
       }
-      return { commentary: null, state: "missing", lastUpdated: null, statusCode: res.status };
+      return {
+        commentary: null,
+        state: 'missing',
+        lastUpdated: null,
+        statusCode: res.status
+      };
     }
 
     const commentary = (await res.json()) as Commentary;
     const updatedAt = commentary.updated_at || commentary.generated_at || null;
 
-    let state: CommentaryFetchState = "ok";
+    let state: CommentaryFetchState = 'ok';
     if (updatedAt) {
       const ageMs = Date.now() - new Date(updatedAt).getTime();
       if (Number.isFinite(ageMs) && ageMs > 6 * 60 * 60 * 1000) {
-        state = "stale";
+        state = 'stale';
       }
     }
 
     return { commentary, state, lastUpdated: updatedAt };
   } catch {
-    return { commentary: null, state: "error", lastUpdated: null };
+    return { commentary: null, state: 'error', lastUpdated: null };
   }
 }
 
 export async function fetchDataTrust(
   citySlug: string,
+  options?: { apiBase?: string }
 ): Promise<DataTrustResponse | null> {
-  if (!API_BASE) return null;
+  const apiBase = options?.apiBase;
+  if (!apiBase) return null;
 
   try {
-    const res = await fetch(`${API_BASE}/trust/${citySlug}`, {
-      headers: { Accept: "application/json" },
+    const res = await fetch(`${apiBase}/trust/${citySlug}`, {
+      headers: { Accept: 'application/json' }
     });
     if (!res.ok) return null;
     return (await res.json()) as DataTrustResponse;
@@ -122,26 +132,19 @@ export async function fetchDataTrust(
   }
 }
 
-export async function submitReport(report: CrowdReport): Promise<boolean> {
-  try {
-    const res = await fetch(`/api/report`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(report),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
 export async function fetchReports(
   citySlug: string,
-  db: D1Database,
+  db: {
+    prepare: (sql: string) => {
+      bind: (...values: unknown[]) => {
+        all: <T>() => Promise<{ results?: T[] }>;
+      };
+    };
+  }
 ): Promise<CrowdReportRow[]> {
   const stmt = db
     .prepare(
-      "SELECT * FROM reports WHERE city_slug = ? ORDER BY created_at DESC LIMIT 20",
+      'SELECT * FROM reports WHERE city_slug = ? ORDER BY created_at DESC LIMIT 20'
     )
     .bind(citySlug);
   const { results } = await stmt.all<CrowdReportRow>();
