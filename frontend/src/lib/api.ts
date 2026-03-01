@@ -59,6 +59,21 @@ export interface CommentaryFetchResult {
   statusCode?: number;
 }
 
+export interface DataTrustModel {
+  model_name: string;
+  run_time: string;
+  latest_valid_time: string;
+  total_rows: number;
+  usable_rows: number;
+}
+
+export interface DataTrustResponse {
+  city_slug: string;
+  status: "ok" | "missing";
+  generated_at: string;
+  models: DataTrustModel[];
+}
+
 export async function fetchCommentary(
   citySlug: string,
 ): Promise<CommentaryFetchResult> {
@@ -88,6 +103,22 @@ export async function fetchCommentary(
     return { commentary, state, lastUpdated: updatedAt };
   } catch {
     return { commentary: null, state: "error", lastUpdated: null };
+  }
+}
+
+export async function fetchDataTrust(
+  citySlug: string,
+): Promise<DataTrustResponse | null> {
+  if (!API_BASE) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/trust/${citySlug}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as DataTrustResponse;
+  } catch {
+    return null;
   }
 }
 

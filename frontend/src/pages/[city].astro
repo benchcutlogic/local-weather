@@ -1,8 +1,13 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getCityBySlug, metersToFeet, CITIES } from "../lib/cities";
-import { fetchCommentary, fetchReports } from "../lib/api";
-import type { Commentary, CrowdReportRow, CommentaryFetchResult } from "../lib/api";
+import { fetchCommentary, fetchDataTrust, fetchReports } from "../lib/api";
+import type {
+  Commentary,
+  CrowdReportRow,
+  CommentaryFetchResult,
+  DataTrustResponse,
+} from "../lib/api";
 
 const { city: citySlug } = Astro.params;
 
@@ -13,6 +18,7 @@ if (!cityConfig) {
 
 const commentaryResult: CommentaryFetchResult = await fetchCommentary(citySlug!);
 const commentary: Commentary | null = commentaryResult.commentary;
+const dataTrust: DataTrustResponse | null = await fetchDataTrust(citySlug!);
 
 // Fetch crowdsourced reports from D1
 let reports: CrowdReportRow[] = [];
@@ -145,6 +151,31 @@ function timeAgo(iso: string): string {
 
         <!-- Right Column: Sidebar -->
         <div class="space-y-6">
+          <!-- Data Trust Contract -->
+          <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
+            <h2 class="text-lg font-bold text-wx-900 mb-2">Data Trust</h2>
+            <p class="text-xs text-wx-500 mb-3">Latest model run freshness + usable data coverage</p>
+            {dataTrust && dataTrust.models.length > 0 ? (
+              <div class="space-y-2">
+                {dataTrust.models.map((m) => (
+                  <div class="border-b border-wx-50 pb-2 last:border-0">
+                    <div class="flex items-center justify-between">
+                      <span class="text-sm font-semibold text-wx-800">{m.model_name}</span>
+                      <span class={`text-xs px-2 py-0.5 rounded-full ${m.usable_rows > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        {m.usable_rows}/{m.total_rows}
+                      </span>
+                    </div>
+                    <div class="text-xs text-wx-500 mt-1">
+                      run {timeAgo(m.run_time)} • valid thru {timeAgo(m.latest_valid_time)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p class="text-sm text-wx-400">Trust metrics unavailable.</p>
+            )}
+          </section>
+
           <!-- Verification Scores -->
           <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
             <h2 class="text-lg font-bold text-wx-900 mb-3">Model Accuracy</h2>

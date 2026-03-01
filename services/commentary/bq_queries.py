@@ -142,6 +142,57 @@ def get_verification_scores(city_slug: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def get_data_trust_summary(city_slug: str) -> list[dict]:
+    """Get per-model freshness and usable-row summary for UI trust contract."""
+    client = _get_client()
+    query = f"""
+    WITH recent AS (
+      SELECT
+        model_name,
+        run_time,
+        valid_time,
+        temperature_2m,
+        precip_kg_m2,
+        wind_speed_10m,
+        snow_depth,
+        relative_humidity
+      FROM `{GCP_PROJECT}.{BQ_DATASET}.forecast_runs`
+      WHERE city_slug = @city_slug
+        AND run_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
+    ),
+    latest_per_model AS (
+      SELECT model_name, MAX(run_time) AS latest_run_time
+      FROM recent
+      GROUP BY model_name
+    )
+    SELECT
+      r.model_name,
+      l.latest_run_time AS run_time,
+      MAX(r.valid_time) AS latest_valid_time,
+      COUNT(*) AS total_rows,
+      COUNTIF(
+        r.temperature_2m IS NOT NULL
+        OR r.precip_kg_m2 IS NOT NULL
+        OR r.wind_speed_10m IS NOT NULL
+        OR r.snow_depth IS NOT NULL
+        OR r.relative_humidity IS NOT NULL
+      ) AS usable_rows
+    FROM recent r
+    JOIN latest_per_model l
+      ON r.model_name = l.model_name
+      AND r.run_time = l.latest_run_time
+    GROUP BY r.model_name, l.latest_run_time
+    ORDER BY r.model_name
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("city_slug", "STRING", city_slug),
+        ]
+    )
+    rows = client.query(query, job_config=job_config).result()
+    return [dict(row) for row in rows]
+
+
 def get_all_city_slugs() -> list[str]:
     """Get all distinct city slugs from forecast_runs."""
     client = _get_client()

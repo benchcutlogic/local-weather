@@ -18,6 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 from bq_queries import (
     get_all_city_slugs,
+    get_data_trust_summary,
     get_latest_forecasts,
     get_model_drift,
     get_terrain_context,
@@ -84,6 +85,21 @@ class GenerateAllResponse(BaseModel):
 class GeeResponse(BaseModel):
     cities_processed: int
     status: str
+
+
+class DataTrustModel(BaseModel):
+    model_name: str
+    run_time: str
+    latest_valid_time: str
+    total_rows: int
+    usable_rows: int
+
+
+class DataTrustResponse(BaseModel):
+    city_slug: str
+    status: str
+    generated_at: str
+    models: list[DataTrustModel]
 
 
 class CommentaryConfidence(BaseModel):
@@ -324,6 +340,33 @@ async def generate_commentary(city_slug: str) -> CommentaryResponse:
             status="error",
             error=str(e),
         )
+
+
+@app.get("/trust/{city_slug}", response_model=DataTrustResponse)
+async def get_data_trust(city_slug: str) -> DataTrustResponse:
+    """Return per-model freshness + usable row counts for UI trust contract."""
+    city = CITIES.get(city_slug)
+    if city is None:
+        raise HTTPException(status_code=404, detail=f"City not found: {city_slug}")
+
+    rows = get_data_trust_summary(city_slug)
+    models = [
+        DataTrustModel(
+            model_name=str(r["model_name"]),
+            run_time=str(r["run_time"]),
+            latest_valid_time=str(r["latest_valid_time"]),
+            total_rows=int(r["total_rows"]),
+            usable_rows=int(r["usable_rows"]),
+        )
+        for r in rows
+    ]
+
+    return DataTrustResponse(
+        city_slug=city_slug,
+        status="ok" if models else "missing",
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        models=models,
+    )
 
 
 @app.post("/generate-all", response_model=GenerateAllResponse)
