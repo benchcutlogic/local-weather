@@ -91,6 +91,142 @@
     };
   }
 
+  type ThresholdStatus = 'triggered' | 'near' | 'clear';
+
+  function thresholdStatus(key: string, text: string): ThresholdStatus {
+    const has = (patterns: RegExp[]) => patterns.some((pattern) => pattern.test(text));
+
+    if (key === 'snowIn24hIn') {
+      if (has([/winter storm/i, /heavy snow/i, /blizzard/i])) return 'triggered';
+      if (has([/snow/i])) return 'near';
+      return 'clear';
+    }
+
+    if (key === 'windGustMph') {
+      if (has([/high wind/i, /wind advisory/i, /gusts?\s*(to|over)?\s*\d+/i])) return 'triggered';
+      if (has([/wind/i])) return 'near';
+      return 'clear';
+    }
+
+    if (key === 'rainIn1hIn') {
+      if (has([/flash flood/i, /flood/i, /monsoon/i, /heavy rain/i])) return 'triggered';
+      if (has([/rain/i, /storm/i])) return 'near';
+      return 'clear';
+    }
+
+    if (key === 'heatIndexF') {
+      if (has([/excessive heat/i, /dangerous heat/i])) return 'triggered';
+      if (has([/hot/i, /heat/i])) return 'near';
+      return 'clear';
+    }
+
+    if (key === 'freezingLevelFt') {
+      if (has([/freezing level/i, /rain\s*to\s*snow/i, /flash freeze/i])) return 'triggered';
+      if (has([/freezing/i, /snow line/i])) return 'near';
+      return 'clear';
+    }
+
+    return 'clear';
+  }
+
+  const thresholdRows = $derived.by(() => {
+    const thresholds = data.cityConfig.alertThresholds;
+    if (!thresholds || !data.commentary) return [] as { key: string; label: string; value: string; status: ThresholdStatus }[];
+
+    const text = [
+      data.commentary.headline,
+      data.commentary.current_conditions,
+      data.commentary.todays_forecast,
+      data.commentary.model_analysis,
+      data.commentary.extended_outlook,
+      ...(data.commentary.alerts || [])
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    const pretty: Record<string, string> = {
+      snowIn24hIn: 'Snow (24h)',
+      windGustMph: 'Wind gust',
+      rainIn1hIn: 'Rain (1h)',
+      heatIndexF: 'Heat index',
+      freezingLevelFt: 'Freezing level'
+    };
+
+    const units: Record<string, string> = {
+      snowIn24hIn: 'in',
+      windGustMph: 'mph',
+      rainIn1hIn: 'in',
+      heatIndexF: '°F',
+      freezingLevelFt: 'ft'
+    };
+
+    return Object.entries(thresholds).map(([key, raw]) => ({
+      key,
+      label: pretty[key] || key,
+      value: `${raw} ${units[key] || ''}`.trim(),
+      status: thresholdStatus(key, text)
+    }));
+  });
+
+  const riskSummary = $derived.by(() => {
+    if (!data.commentary) {
+      return { level: 'Watch', score: 1, drivers: ['Forecast generation in progress'] };
+    }
+
+    let score = 0;
+    const drivers: string[] = [];
+
+    if (data.commentary.confidence.level === 'low') {
+      score += 2;
+      drivers.push('Low confidence forecast');
+    } else if (data.commentary.confidence.level === 'moderate') {
+      score += 1;
+      drivers.push('Moderate confidence forecast');
+    }
+
+    const alertCount = data.commentary.alerts?.length || 0;
+    if (alertCount > 0) {
+      score += Math.min(2, alertCount);
+      drivers.push(`${alertCount} active alert${alertCount > 1 ? 's' : ''}`);
+    }
+
+    const triggered = thresholdRows.filter((row) => row.status === 'triggered').length;
+    const near = thresholdRows.filter((row) => row.status === 'near').length;
+    if (triggered > 0) {
+      score += 2;
+      drivers.push(`${triggered} threshold${triggered > 1 ? 's' : ''} triggered`);
+    } else if (near > 0) {
+      score += 1;
+      drivers.push(`${near} threshold${near > 1 ? 's' : ''} near trigger`);
+    }
+
+    if (data.commentaryResult?.state === 'stale') {
+      score += 1;
+      drivers.push('Forecast feed is stale');
+    }
+
+    if (data.dataTrust?.models?.length) {
+      const weakCoverage = data.dataTrust.models.some(
+        (model) => model.total_rows > 0 && model.usable_rows / model.total_rows < 0.75
+      );
+      if (weakCoverage) {
+        score += 1;
+        drivers.push('Low usable model coverage');
+      }
+    }
+
+    const level = score >= 5 ? 'High' : score >= 3 ? 'Elevated' : score >= 1 ? 'Watch' : 'Low';
+    return { level, score, drivers: drivers.slice(0, 3) };
+  });
+
+  const riskStyles: Record<string, string> = {
+    Low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    Watch: 'bg-amber-50 text-amber-700 border-amber-200',
+    Elevated: 'bg-orange-50 text-orange-700 border-orange-200',
+    High: 'bg-red-50 text-red-700 border-red-200'
+  };
+
   $effect(() => {
     if (!browser || !data.commentary) return;
 
@@ -163,6 +299,26 @@
       >
     </div>
   </div>
+
+  <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-4 mb-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h2 class="text-base font-bold text-wx-900 mb-1">Risk Summary</h2>
+        <p class="text-sm text-wx-600">Operational risk synthesized from confidence, alerts, thresholds, and feed health.</p>
+      </div>
+      <span class={`px-3 py-1 rounded-full text-xs font-semibold border ${riskStyles[riskSummary.level]}`}>
+        {riskSummary.level} risk
+      </span>
+    </div>
+
+    {#if riskSummary.drivers.length > 0}
+      <ul class="mt-3 grid gap-2 md:grid-cols-3">
+        {#each riskSummary.drivers as driver}
+          <li class="text-sm text-wx-700 bg-wx-50 border border-wx-100 rounded-md px-3 py-2">{driver}</li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
 
   <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-4 mb-6">
     <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -259,6 +415,35 @@
     </div>
 
     <div class="space-y-6">
+      <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
+        <h2 class="text-lg font-bold text-wx-900 mb-3">Alert Thresholds</h2>
+        {#if thresholdRows.length === 0}
+          <p class="text-sm text-wx-600">No city thresholds configured yet.</p>
+        {:else}
+          <ul class="space-y-2">
+            {#each thresholdRows as row}
+              <li class="flex items-center justify-between gap-2 rounded-md border border-wx-100 px-3 py-2">
+                <div>
+                  <p class="text-sm font-medium text-wx-900">{row.label}</p>
+                  <p class="text-xs text-wx-500">Trigger: {row.value}</p>
+                </div>
+                <span
+                  class={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    row.status === 'triggered'
+                      ? 'bg-red-100 text-red-700'
+                      : row.status === 'near'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-emerald-100 text-emerald-700'
+                  }`}
+                >
+                  {row.status === 'triggered' ? 'Triggered' : row.status === 'near' ? 'Near' : 'Clear'}
+                </span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </section>
+
       <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
         <h2 class="text-lg font-bold text-wx-900 mb-3">Community Reports</h2>
         {#if data.reports.length > 0}
