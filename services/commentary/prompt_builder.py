@@ -306,6 +306,47 @@ def _horizon_blend_summary(forecasts: list[dict], now: datetime) -> str:
     return "\n".join(lines)
 
 
+def _model_disagreement_summary(forecasts: list[dict]) -> str:
+    """Compute model spread metrics for temperature and precip at overlapping valid times."""
+    if not forecasts:
+        return "No model disagreement data (insufficient forecasts)."
+
+    by_time: dict[str, dict[str, dict[str, float | None]]] = {}
+    for row in forecasts:
+        if row.get("elevation_band") is not None:
+            continue
+        vt = str(row.get("valid_time", ""))
+        model = str(row.get("model_name", ""))
+        if not vt or not model:
+            continue
+        if vt not in by_time:
+            by_time[vt] = {}
+        by_time[vt][model] = {
+            "temp_k": row.get("temperature_2m"),
+            "precip": row.get("precip_kg_m2"),
+        }
+
+    lines: list[str] = []
+    for vt in sorted(by_time.keys())[:8]:
+        models = by_time[vt]
+        if len(models) < 2:
+            continue
+        temps = [v["temp_k"] for v in models.values() if v.get("temp_k") is not None]
+        precips = [v["precip"] for v in models.values() if v.get("precip") is not None]
+        parts = [f"valid={vt}, models={','.join(sorted(models.keys()))}"]
+        if len(temps) >= 2:
+            spread_f = (max(temps) - min(temps)) * 9 / 5
+            parts.append(f"temp_spread={spread_f:.1f}F")
+        if len(precips) >= 2:
+            spread_in = (max(precips) - min(precips)) * 0.0393701
+            parts.append(f"precip_spread={spread_in:.2f}in")
+        lines.append("  " + ", ".join(parts))
+
+    if not lines:
+        return "Insufficient overlapping timesteps to compute model disagreement."
+    return "\n".join(lines)
+
+
 def build_commentary_prompt(
     city_slug: str,
     city_name: str,
@@ -313,14 +354,31 @@ def build_commentary_prompt(
     drift_data: list[dict],
     terrain: dict | None,
     verification_scores: list[dict],
+    *,
+    tone_instruction: str = "",
+    microzones: list[dict] | None = None,
 ) -> str:
     """Build the full prompt for Gemini to generate forecast commentary."""
     now = datetime.now(timezone.utc)
 
+    microzone_section = ""
+    if microzones:
+        zone_lines = []
+        for z in microzones:
+            zone_lines.append(
+                f"- {z['name']} ({z['zone_id']}): elev {z['elevation_range_m'][0]}-{z['elevation_range_m'][1]}m, "
+                f"{z.get('terrain_notes', '')}"
+            )
+        microzone_section = "## City Microzones\n" + "\n".join(zone_lines)
+
+    tone_block = ""
+    if tone_instruction:
+        tone_block = f"\n## Voice / Tone Instruction\n{tone_instruction}\n"
+
     return f"""You are a hyperlocal weather forecaster writing for {city_name}. Write in a conversational,
 engaging style similar to durangoweatherguy.com — knowledgeable but approachable, like you're talking to
 a neighbor over the fence. You deeply understand mountain/terrain weather and local microclimates.
-
+{tone_block}
 Current UTC time: {now.isoformat()}
 
 ## Your Task
@@ -343,6 +401,11 @@ Generate a comprehensive forecast commentary for {city_name} ({city_slug}). Incl
 
 ## Terrain Context
 {_format_terrain(terrain)}
+
+{microzone_section}
+
+## Model Disagreement (spread at overlapping timesteps)
+{_model_disagreement_summary(forecasts)}
 
 ## Data Availability Summary (important)
 {_data_availability_summary(forecasts)}
@@ -385,6 +448,32 @@ Respond with a JSON object containing these fields:
         "immediate_0_6h": "<1 sentence rationale for immediate horizon model blend>",
         "short_6_48h": "<1 sentence rationale for short horizon model blend>",
         "extended_48h_plus": "<1 sentence rationale for extended horizon model blend>"
+    }},
+    "dayparts": {{
+        "am": "<1-3 sentence morning forecast>",
+        "pm": "<1-3 sentence afternoon forecast>",
+        "night": "<1-3 sentence evening/overnight forecast>"
+    }},
+    "changes": ["<string describing what changed vs prior run, e.g. 'GFS warmed 3F for tomorrow afternoon'>"],
+    "model_disagreement": {{
+        "level": "<low|moderate|high>",
+        "summary": "<1-2 sentences about model spread>",
+        "biggest_spread_metric": "<temp|precip|snow|wind>",
+        "biggest_spread_value": "<human-readable spread, e.g. '8F temp spread'>",
+        "confidence_trend": "<improving|stable|degrading>"
+    }},
+    "dayparts": {{
+        "am": "<1-3 sentence morning forecast>",
+        "pm": "<1-3 sentence afternoon forecast>",
+        "night": "<1-3 sentence evening/overnight forecast>"
+    }},
+    "changes": ["<string describing what changed vs prior run, e.g. 'GFS warmed 3F for tomorrow afternoon'>"],
+    "model_disagreement": {{
+        "level": "<low|moderate|high>",
+        "summary": "<1-2 sentences about model spread>",
+        "biggest_spread_metric": "<temp|precip|snow|wind>",
+        "biggest_spread_value": "<human-readable spread, e.g. '8F temp spread'>",
+        "confidence_trend": "<improving|stable|degrading>"
     }},
     "alerts": ["<any notable weather alerts or warnings>"],
     "updated_at": "<ISO timestamp>"

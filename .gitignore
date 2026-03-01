@@ -7,3 +7,5 @@ frontend/build/
 frontend/dist/
 .pnpm-store/
 .tmp_*.txt
+__pycache__/
+*__pycache__*

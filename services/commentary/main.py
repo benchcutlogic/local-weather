@@ -18,15 +18,32 @@ from pydantic import BaseModel, ValidationError
 
 from bq_queries import (
     get_all_city_slugs,
+    get_best_model_by_horizon,
     get_data_trust_summary,
     get_latest_forecasts,
     get_model_drift,
     get_terrain_context,
     get_verification_scores,
+    get_verification_scores_by_zone,
 )
 from config import GCS_BUCKET, GCP_PROJECT, GEMINI_MODEL, load_cities, CityConfig
 from gee_tasks import extract_rtma_for_city, extract_terrain_for_city
 from prompt_builder import build_commentary_prompt
+from tone_profiles import get_tone_profile, TONE_PROFILES, DEFAULT_TONE
+
+MICROZONES: dict[str, list[dict]] = {}
+
+
+def _load_microzones() -> dict[str, list[dict]]:
+    """Load microzone definitions from config file."""
+    import os
+    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "microzones.json")
+    config_path = os.path.normpath(config_path)
+    if not os.path.exists(config_path):
+        return {}
+    with open(config_path) as f:
+        data = json.load(f)
+    return data.get("microzones", {})
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,9 +72,11 @@ def _get_bq_client() -> bigquery.Client:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global CITIES
+    global CITIES, MICROZONES
     CITIES = load_cities()
+    MICROZONES = _load_microzones()
     logger.info("Loaded %d cities: %s", len(CITIES), list(CITIES.keys()))
+    logger.info("Loaded microzones for: %s", list(MICROZONES.keys()))
     yield
 
 
@@ -124,6 +143,29 @@ class HorizonConfidence(BaseModel):
     extended_48h_plus: str
 
 
+class DaypartPayload(BaseModel):
+    am: str = ""
+    pm: str = ""
+    night: str = ""
+
+
+class ModelDisagreement(BaseModel):
+    level: str = "low"
+    summary: str = ""
+    biggest_spread_metric: str = ""
+    biggest_spread_value: str = ""
+    confidence_trend: str = "stable"
+
+
+class MicrozoneInfo(BaseModel):
+    zone_id: str
+    name: str
+    slug: str
+    priority: int
+    elevation_range_m: list[int]
+    description: str
+
+
 class CommentaryPayload(BaseModel):
     city_slug: str
     city_name: str
@@ -137,6 +179,10 @@ class CommentaryPayload(BaseModel):
     confidence: CommentaryConfidence
     best_model: str
     horizon_confidence: HorizonConfidence
+    dayparts: DaypartPayload | None = None
+    changes: list[str] = []
+    model_disagreement: ModelDisagreement | None = None
+    tone: str = "professional"
     alerts: list[str]
     updated_at: str
 
@@ -223,6 +269,17 @@ def _normalize_and_validate_commentary(
             "extended_48h_plus": "Lower confidence expected for longer-range trend framing.",
         },
     )
+    # Ensure new structured fields have defaults for backward compat
+    payload.setdefault("dayparts", {"am": "", "pm": "", "night": ""})
+    payload.setdefault("changes", [])
+    payload.setdefault("model_disagreement", {
+        "level": "low",
+        "summary": "",
+        "biggest_spread_metric": "",
+        "biggest_spread_value": "",
+        "confidence_trend": "stable",
+    })
+    payload.setdefault("tone", "professional")
 
     validated = CommentaryPayload.model_validate(payload)
     return validated.model_dump()
@@ -274,8 +331,62 @@ async def health_check() -> dict:
     return {"status": "healthy", "cities_loaded": len(CITIES)}
 
 
+@app.get("/verification/{city_slug}")
+async def get_verification(city_slug: str, zone_id: str | None = None) -> dict:
+    """Return rolling verification scores for a city, optionally by zone.
+
+    Closes #38: rolling microclimate verification scores.
+    """
+    city = CITIES.get(city_slug)
+    if city is None:
+        raise HTTPException(status_code=404, detail=f"City not found: {city_slug}")
+
+    scores = get_verification_scores_by_zone(city_slug, zone_id)
+    best_models = get_best_model_by_horizon(city_slug)
+
+    return {
+        "city_slug": city_slug,
+        "zone_id": zone_id,
+        "scores": scores,
+        "best_model_by_horizon": best_models,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/microzones/{city_slug}")
+async def get_microzones(city_slug: str) -> dict:
+    """Return microzone definitions for a city."""
+    zones = MICROZONES.get(city_slug, [])
+    return {
+        "city_slug": city_slug,
+        "microzones": [
+            MicrozoneInfo(
+                zone_id=z["zone_id"],
+                name=z["name"],
+                slug=z["slug"],
+                priority=z["priority"],
+                elevation_range_m=z["elevation_range_m"],
+                description=z["description"],
+            ).model_dump()
+            for z in zones
+        ],
+    }
+
+
+@app.get("/tones")
+async def list_tones() -> dict:
+    """Return available tone profiles."""
+    return {
+        "tones": [
+            {"slug": t.slug, "label": t.label}
+            for t in TONE_PROFILES.values()
+        ],
+        "default": DEFAULT_TONE,
+    }
+
+
 @app.post("/generate/{city_slug}", response_model=CommentaryResponse)
-async def generate_commentary(city_slug: str) -> CommentaryResponse:
+async def generate_commentary(city_slug: str, tone: str | None = None) -> CommentaryResponse:
     """Generate forecast commentary for a single city."""
     city = CITIES.get(city_slug)
     if city is None:
@@ -318,6 +429,9 @@ async def generate_commentary(city_slug: str) -> CommentaryResponse:
             )
 
         # Build prompt and call Gemini
+        tone_profile = get_tone_profile(tone)
+        city_microzones = MICROZONES.get(city_slug, [])
+
         prompt = build_commentary_prompt(
             city_slug=city_slug,
             city_name=city.name,
@@ -325,6 +439,8 @@ async def generate_commentary(city_slug: str) -> CommentaryResponse:
             drift_data=drift_data,
             terrain=terrain,
             verification_scores=scores,
+            tone_instruction=tone_profile.system_instruction,
+            microzones=city_microzones,
         )
 
         raw_response = await _call_gemini(prompt)
