@@ -67,76 +67,83 @@
           map.on('load', async () => {
             if (destroyed) return;
 
-            map.addSource('zones', {
-              type: 'geojson',
-              data: `/maps/${citySlug}-zones.geojson`,
-              promoteId: 'zone_id'
-            });
+            try {
+              map.addSource('zones', {
+                type: 'geojson',
+                data: `/maps/${citySlug}-zones.geojson`,
+                promoteId: 'zone_id'
+              });
 
-            map.addLayer({
-              id: 'zone-fills',
-              type: 'fill',
-              source: 'zones',
-              paint: {
-                'fill-color': [
-                  'interpolate',
-                  ['linear'],
-                  ['coalesce', ['feature-state', 'temp_delta_f'], 0],
-                  -10,
-                  '#313695',
-                  0,
-                  '#ffffbf',
-                  10,
-                  '#a50026'
-                ],
-                'fill-opacity': 0.68
-              }
-            });
-
-            map.addImage('confidence-low-hatch', createDiagonalPattern(), {
-              pixelRatio: 2
-            });
-
-            map.addLayer({
-              id: 'zone-confidence-hatch',
-              type: 'fill',
-              source: 'zones',
-              paint: {
-                'fill-pattern': 'confidence-low-hatch',
-                'fill-opacity': [
-                  'case',
-                  ['==', ['feature-state', 'confidence'], 'low'],
-                  0.45,
-                  0
-                ]
-              }
-            });
-
-            map.addLayer({
-              id: 'zone-lines',
-              type: 'line',
-              source: 'zones',
-              paint: {
-                'line-color': '#0b3f6e',
-                'line-width': 1.2
-              }
-            });
-
-            const response = await fetch(`/api/map/${citySlug}/summary`);
-            const summaryData = (await response.json()) as ZoneSummaryResponse;
-            summary = summaryData;
-
-            for (const zone of summaryData.zones) {
-              map.setFeatureState(
-                { source: 'zones', id: zone.zone_id },
-                {
-                  temp_delta_f: zone.temp_delta_f,
-                  confidence: zone.confidence_level
+              map.addLayer({
+                id: 'zone-fills',
+                type: 'fill',
+                source: 'zones',
+                paint: {
+                  'fill-color': [
+                    'interpolate',
+                    ['linear'],
+                    ['coalesce', ['feature-state', 'temp_delta_f'], 0],
+                    -10,
+                    '#313695',
+                    0,
+                    '#ffffbf',
+                    10,
+                    '#a50026'
+                  ],
+                  'fill-opacity': 0.68
                 }
-              );
-            }
+              });
 
-            mapLoaded = true;
+              map.addImage('confidence-low-hatch', createDiagonalPattern(), {
+                pixelRatio: 2
+              });
+
+              map.addLayer({
+                id: 'zone-confidence-hatch',
+                type: 'fill',
+                source: 'zones',
+                paint: {
+                  'fill-pattern': 'confidence-low-hatch',
+                  'fill-opacity': [
+                    'case',
+                    ['==', ['feature-state', 'confidence'], 'low'],
+                    0.45,
+                    0
+                  ]
+                }
+              });
+
+              map.addLayer({
+                id: 'zone-lines',
+                type: 'line',
+                source: 'zones',
+                paint: {
+                  'line-color': '#0b3f6e',
+                  'line-width': 1.2
+                }
+              });
+
+              const response = await fetch(`/api/map/${citySlug}/summary`);
+              if (!response.ok) throw new Error(`Zone summary fetch failed: ${response.status} ${response.statusText}`);
+              const summaryData = (await response.json()) as ZoneSummaryResponse;
+              summary = summaryData;
+
+              for (const zone of summaryData.zones) {
+                map.setFeatureState(
+                  { source: 'zones', id: zone.zone_id },
+                  {
+                    temp_delta_f: zone.temp_delta_f,
+                    confidence: zone.confidence_level
+                  }
+                );
+              }
+
+              mapLoaded = true;
+            } catch (err) {
+              if (!destroyed) {
+                mapError = err instanceof Error ? err.message : 'Failed to load zone data';
+              }
+            }
           });
 
           map.on('error', (event) => {
