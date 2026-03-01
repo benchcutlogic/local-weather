@@ -227,12 +227,14 @@ def get_verification_scores_by_zone(city_slug: str, zone_id: str | None = None) 
     return [dict(row) for row in rows]
 
 
-def get_best_model_by_horizon(city_slug: str) -> list[dict]:
+def get_best_model_by_horizon(city_slug: str, zone_id: str | None = None) -> list[dict]:
     """Return the best-performing model per horizon bucket for a city.
 
     Used by the frontend model performance summary card (#38).
+    When *zone_id* is provided the ranking is scoped to that zone.
     """
     client = _get_client()
+    zone_filter = "AND zone_id = @zone_id" if zone_id else ""
     query = f"""
     WITH ranked AS (
         SELECT
@@ -248,16 +250,16 @@ def get_best_model_by_horizon(city_slug: str) -> list[dict]:
         FROM `{GCP_PROJECT}.{BQ_DATASET}.verification_scores`
         WHERE city_slug = @city_slug
             AND num_comparisons >= 10
+            {zone_filter}
     )
     SELECT model_name, horizon_bucket, num_comparisons, temp_rmse, precip_mae
     FROM ranked
     WHERE rn = 1
     """
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("city_slug", "STRING", city_slug),
-        ]
-    )
+    params = [bigquery.ScalarQueryParameter("city_slug", "STRING", city_slug)]
+    if zone_id:
+        params.append(bigquery.ScalarQueryParameter("zone_id", "STRING", zone_id))
+    job_config = bigquery.QueryJobConfig(query_parameters=params)
     rows = client.query(query, job_config=job_config).result()
     return [dict(row) for row in rows]
 

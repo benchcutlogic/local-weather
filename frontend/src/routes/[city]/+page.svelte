@@ -220,14 +220,16 @@
           <form
             method="POST"
             action="?/report"
-            use:enhance={() => {
+            use:enhance={({ formData }) => {
               reportSubmitting = true;
+              const hasTemp = !!formData.get('temp_f');
+              const hasSnow = !!formData.get('snow_in');
               return async ({ update }) => {
                 reportSubmitting = false;
                 track('report_submitted', {
                   city_slug: data.citySlug,
-                  has_temp: false,
-                  has_snow: false
+                  has_temp: hasTemp,
+                  has_snow: hasSnow
                 });
                 await update();
               };

@@ -342,7 +342,7 @@ async def get_verification(city_slug: str, zone_id: str | None = None) -> dict:
         raise HTTPException(status_code=404, detail=f"City not found: {city_slug}")
 
     scores = get_verification_scores_by_zone(city_slug, zone_id)
-    best_models = get_best_model_by_horizon(city_slug)
+    best_models = get_best_model_by_horizon(city_slug, zone_id)
 
     return {
         "city_slug": city_slug,

@@ -462,19 +462,6 @@ Respond with a JSON object containing these fields:
         "biggest_spread_value": "<human-readable spread, e.g. '8F temp spread'>",
         "confidence_trend": "<improving|stable|degrading>"
     }},
-    "dayparts": {{
-        "am": "<1-3 sentence morning forecast>",
-        "pm": "<1-3 sentence afternoon forecast>",
-        "night": "<1-3 sentence evening/overnight forecast>"
-    }},
-    "changes": ["<string describing what changed vs prior run, e.g. 'GFS warmed 3F for tomorrow afternoon'>"],
-    "model_disagreement": {{
-        "level": "<low|moderate|high>",
-        "summary": "<1-2 sentences about model spread>",
-        "biggest_spread_metric": "<temp|precip|snow|wind>",
-        "biggest_spread_value": "<human-readable spread, e.g. '8F temp spread'>",
-        "confidence_trend": "<improving|stable|degrading>"
-    }},
     "alerts": ["<any notable weather alerts or warnings>"],
     "updated_at": "<ISO timestamp>"
 }}
