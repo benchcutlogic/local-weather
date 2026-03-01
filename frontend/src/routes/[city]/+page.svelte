@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { browser } from '$app/environment';
   import { enhance } from '$app/forms';
   import { page } from '$app/state';
@@ -180,7 +181,7 @@
     // #57: prefer structured changes payload when present
     if (data.commentary.changes && data.commentary.changes.length > 0) {
       changes = data.commentary.changes;
-      if (changes.length > 0) trackChangesViewed(data.citySlug, changes.length);
+      trackChangesViewed(data.citySlug, data.commentary.changes.length);
       return;
     }
 
@@ -216,7 +217,7 @@
       }
 
       changes = nextChanges;
-      if (changes.length > 0) trackChangesViewed(data.citySlug, changes.length);
+      if (nextChanges.length > 0) trackChangesViewed(data.citySlug, nextChanges.length);
       window.localStorage.setItem(key, JSON.stringify(current));
     } catch {
       changes = [];
