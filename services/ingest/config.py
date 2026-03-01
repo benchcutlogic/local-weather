@@ -139,3 +139,7 @@ BQ_TABLE = "forecast_runs"
 BQ_GRID_TILES_TABLE = "grid_tiles"
 BQ_GRID_TILE_FIELDS_TABLE = "grid_tile_fields"
 BQ_GRID_POINTS_SAMPLED_TABLE = "grid_points_sampled"
+
+# Optional Cloudflare Worker cache invalidation endpoint
+EDGE_CACHE_PURGE_URL = os.environ.get("EDGE_CACHE_PURGE_URL", "").strip()
+EDGE_CACHE_PURGE_TOKEN = os.environ.get("EDGE_CACHE_PURGE_TOKEN", "").strip()

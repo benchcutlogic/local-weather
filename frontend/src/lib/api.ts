@@ -67,18 +67,34 @@ export interface DataTrustResponse {
   models: DataTrustModel[];
 }
 
+const GCS_FALLBACK = 'https://storage.googleapis.com/hyperlocal-wx-commentary';
+
 export async function fetchCommentary(
   citySlug: string,
   options?: { gcsBase?: string }
 ): Promise<CommentaryFetchResult> {
-  const gcsBase =
-    options?.gcsBase ||
-    'https://storage.googleapis.com/hyperlocal-wx-commentary';
-
   try {
-    const res = await fetch(`${gcsBase}/${citySlug}/latest.json`, {
-      headers: { Accept: 'application/json' }
-    });
+    let res: Response;
+
+    if (options?.gcsBase) {
+      // Server-side (SSR): hit GCS directly via platform.env base URL.
+      res = await fetch(`${options.gcsBase}/${citySlug}/latest.json`, {
+        headers: { Accept: 'application/json' }
+      });
+    } else {
+      // Client-side: route through the edge-cached Worker endpoint.
+      // Note: /api/forecast params beyond city are stripped from the cache key;
+      // the Worker always fetches the same latest.json regardless.
+      res = await fetch(`/api/forecast?city=${encodeURIComponent(citySlug)}`, {
+        headers: { Accept: 'application/json' }
+      });
+      if (!res.ok) {
+        // Fallback to GCS directly if Worker endpoint is unavailable.
+        res = await fetch(`${GCS_FALLBACK}/${citySlug}/latest.json`, {
+          headers: { Accept: 'application/json' }
+        });
+      }
+    }
 
     if (!res.ok) {
       if (res.status === 404) {
@@ -129,6 +145,19 @@ export async function fetchDataTrust(
     return (await res.json()) as DataTrustResponse;
   } catch {
     return null;
+  }
+}
+
+export async function submitReport(report: CrowdReport): Promise<boolean> {
+  try {
+    const res = await fetch('/api/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(report)
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 

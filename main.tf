@@ -22,6 +22,9 @@ module "ingestion" {
   city_aoi_map_json            = jsonencode(var.city_aoi_map)
   deploy_service_account_email = "deploy-ci@${var.gcp_project_id}.iam.gserviceaccount.com"
 
+  edge_cache_purge_url   = var.edge_cache_purge_url
+  edge_cache_purge_token = var.edge_cache_purge_token
+
   depends_on = [google_project_service.apis]
 }
 
@@ -41,4 +44,5 @@ module "edge" {
   cloudflare_zone_id    = var.cloudflare_zone_id
   base_domain           = var.base_domain
   cities                = var.cities
+  cache_purge_token     = var.edge_cache_purge_token
 }

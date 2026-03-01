@@ -17,7 +17,17 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from bigquery_writer import write_forecast_points
-from config import AoiConfig, CityConfig, load_aois, load_cities, load_city_aoi_map
+import httpx
+
+from config import (
+    AoiConfig,
+    CityConfig,
+    EDGE_CACHE_PURGE_TOKEN,
+    EDGE_CACHE_PURGE_URL,
+    load_aois,
+    load_cities,
+    load_city_aoi_map,
+)
 from grib2_reader import (
     get_default_forecast_hours,
     get_latest_run_time,
@@ -73,6 +83,35 @@ async def health_check() -> dict:
     return {"status": "healthy", "cities_loaded": len(CITIES)}
 
 
+async def _purge_edge_cache(city: str, model: str) -> None:
+    if not EDGE_CACHE_PURGE_URL:
+        logger.info("Skipping edge cache purge: EDGE_CACHE_PURGE_URL is not set")
+        return
+    if not EDGE_CACHE_PURGE_TOKEN:
+        logger.warning("Skipping edge cache purge: EDGE_CACHE_PURGE_TOKEN is not set")
+        return
+
+    payload = {"city": city, "model": model.lower()}
+    headers = {
+        "content-type": "application/json",
+        "x-cache-purge-token": EDGE_CACHE_PURGE_TOKEN,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(EDGE_CACHE_PURGE_URL, headers=headers, json=payload)
+            if response.status_code >= 400:
+                logger.warning(
+                    "Edge cache purge failed (%s): %s",
+                    response.status_code,
+                    response.text,
+                )
+            else:
+                logger.info("Edge cache purged for city=%s model=%s", city, model.upper())
+    except Exception as exc:
+        logger.warning("Edge cache purge request failed: %s", exc)
+
+
 async def _run_ingestion(
     model: str,
     run_time: datetime | None = None,
@@ -113,6 +152,9 @@ async def _run_ingestion(
         len(points),
         rows_written,
     )
+
+    if rows_written > 0:
+        await _purge_edge_cache(city="all", model=model)
 
     return IngestResponse(
         model=model.upper(),

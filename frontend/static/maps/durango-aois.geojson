@@ -1,0 +1,59 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "aoi_slug": "historic-downtown",
+        "aoi_name": "Historic Downtown Durango",
+        "zone_id": "dgo-z-001"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-107.931, 37.261],
+          [-107.915, 37.260],
+          [-107.913, 37.273],
+          [-107.928, 37.276],
+          [-107.931, 37.261]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "aoi_slug": "fort-lewis-college",
+        "aoi_name": "Fort Lewis College Bench",
+        "zone_id": "dgo-z-004"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-107.894, 37.268],
+          [-107.879, 37.267],
+          [-107.875, 37.282],
+          [-107.891, 37.285],
+          [-107.894, 37.268]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "aoi_slug": "purgatory-resort",
+        "aoi_name": "Purgatory Resort",
+        "zone_id": "dgo-z-003"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-107.955, 37.396],
+          [-107.930, 37.393],
+          [-107.925, 37.414],
+          [-107.949, 37.418],
+          [-107.955, 37.396]
+        ]]
+      }
+    }
+  ]
+}

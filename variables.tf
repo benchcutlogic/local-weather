@@ -11,6 +11,19 @@ variable "cloudflare_account_id" { type = string }
 variable "cloudflare_zone_id" { type = string }
 variable "base_domain" { type = string }
 
+variable "edge_cache_purge_url" {
+  type        = string
+  description = "Worker endpoint used by ingestion to invalidate edge cache, e.g. https://api.denver.example.com/api/cache/purge"
+  default     = ""
+}
+
+variable "edge_cache_purge_token" {
+  type        = string
+  description = "Shared secret sent as x-cache-purge-token for worker cache invalidation"
+  sensitive   = true
+  default     = ""
+}
+
 # Scaling to 300 cities means adding strictly to this map in tfvars.
 variable "cities" {
   description = "Map of all target cities for the platform."
