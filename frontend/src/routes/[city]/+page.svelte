@@ -1,7 +1,11 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { enhance } from '$app/forms';
+  import { page } from '$app/state';
   import { metersToFeet } from '$lib/cities';
   import MicroclimateMap from '$lib/components/organisms/MicroclimateMap.svelte';
+
+  type Tone = 'professional' | 'friendly' | 'spicy';
 
   let { data } = $props();
 
@@ -11,6 +15,16 @@
     low: 'bg-red-100 text-red-800 border-red-200'
   };
 
+  const toneLabels: Record<Tone, string> = {
+    professional: 'Professional',
+    friendly: 'Friendly',
+    spicy: 'Spicy'
+  };
+
+  let selectedTone = $derived((page.url.searchParams.get('tone') as Tone) || 'professional');
+  let daypartSummary = $derived(dayparts(data.commentary));
+  let changes: string[] = $state([]);
+
   function timeAgo(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
     const mins = Math.floor(diff / 60000);
@@ -19,6 +33,104 @@
     if (hrs < 24) return `${hrs}h ago`;
     return `${Math.floor(hrs / 24)}d ago`;
   }
+
+  function firstSentence(text: string, fallback = 'No update yet.'): string {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return fallback;
+    const parts = trimmed.split(/(?<=[.!?])\s+/);
+    return parts[0] || fallback;
+  }
+
+  function toneText(text: string, tone: Tone): string {
+    if (!text) return text;
+
+    if (tone === 'professional') return text;
+
+    if (tone === 'friendly') {
+      return text
+        .replace(/\bprecipitation\b/gi, 'precip')
+        .replace(/\bapproximately\b/gi, 'about')
+        .replace(/\bconditions\b/gi, 'weather');
+    }
+
+    return text
+      .replace(/\bmoderate confidence\b/gi, 'confidence is a bit shaky')
+      .replace(/\blow confidence\b/gi, 'confidence is sketchy')
+      .replace(/\bhigh confidence\b/gi, 'confidence is solid')
+      .replace(/\bmodel disagreement\b/gi, 'models are arguing')
+      .replace(/\belevated\b/gi, 'spicy');
+  }
+
+  function riskLabel(commentary: (typeof data.commentary) | null): string {
+    if (!commentary) return 'No risk signal yet';
+    const confidence = commentary.confidence.level;
+    const alerts = commentary.alerts?.length || 0;
+
+    if (alerts >= 2 || confidence === 'low') return 'Elevated risk';
+    if (alerts === 1 || confidence === 'moderate') return 'Watch conditions';
+    return 'Low operational risk';
+  }
+
+  function dayparts(commentary: (typeof data.commentary) | null): { am: string; pm: string; night: string } {
+    if (!commentary) {
+      return {
+        am: 'No morning guidance yet.',
+        pm: 'No afternoon guidance yet.',
+        night: 'No evening guidance yet.'
+      };
+    }
+
+    const today = commentary.todays_forecast || '';
+    const extended = commentary.extended_outlook || '';
+    const model = commentary.model_analysis || '';
+
+    return {
+      am: firstSentence(today, 'Morning trend is still stabilizing.'),
+      pm: firstSentence(model, 'Afternoon model spread is still coming in.'),
+      night: firstSentence(extended, 'Evening trend guidance is limited right now.')
+    };
+  }
+
+  $effect(() => {
+    if (!browser || !data.commentary) return;
+
+    const key = `wx:last:${data.citySlug}`;
+    const current = {
+      updated_at: data.commentary.updated_at,
+      confidence: data.commentary.confidence.level,
+      best_model: data.commentary.best_model,
+      alerts_count: data.commentary.alerts?.length || 0,
+      headline: data.commentary.headline
+    };
+
+    try {
+      const priorRaw = window.localStorage.getItem(key);
+      const prior = priorRaw ? JSON.parse(priorRaw) : null;
+
+      const nextChanges: string[] = [];
+      if (prior) {
+        if (prior.best_model !== current.best_model) {
+          nextChanges.push(`Best model changed: ${prior.best_model} → ${current.best_model}`);
+        }
+        if (prior.confidence !== current.confidence) {
+          nextChanges.push(
+            `Confidence moved: ${String(prior.confidence).toUpperCase()} → ${String(current.confidence).toUpperCase()}`
+          );
+        }
+        if (prior.alerts_count !== current.alerts_count) {
+          nextChanges.push(`Alert count changed: ${prior.alerts_count} → ${current.alerts_count}`);
+        }
+        if (prior.headline !== current.headline) {
+          nextChanges.push('Forecast headline changed since the previous update');
+        }
+      }
+
+      changes = nextChanges;
+      window.localStorage.setItem(key, JSON.stringify(current));
+    } catch {
+      changes = [];
+    }
+  });
 </script>
 
 <svelte:head>
@@ -46,9 +158,64 @@
       >
         {data.commentary.confidence.level.toUpperCase()} confidence
       </span>
-      <span class="text-wx-300">Best model: <span class="text-white font-medium">{data.commentary.best_model}</span></span>
+      <span class="text-wx-300"
+        >Best model: <span class="text-white font-medium">{data.commentary.best_model}</span></span
+      >
     </div>
   </div>
+
+  <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-4 mb-6">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <h2 class="text-base font-bold text-wx-900">Narration style</h2>
+      <div class="flex items-center gap-2">
+        {#each Object.entries(toneLabels) as [tone, label]}
+          <a
+            href={`?tone=${tone}`}
+            class={`px-3 py-1.5 rounded-full text-sm border transition ${
+              selectedTone === tone
+                ? 'bg-wx-700 text-white border-wx-700'
+                : 'bg-white text-wx-700 border-wx-200 hover:border-wx-400'
+            }`}
+          >
+            {label}
+          </a>
+        {/each}
+      </div>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    <article class="bg-white rounded-xl border border-wx-100 p-4">
+      <h3 class="text-xs uppercase tracking-wide text-wx-500 mb-1">Now</h3>
+      <p class="text-sm text-wx-800">{toneText(firstSentence(data.commentary.current_conditions), selectedTone)}</p>
+    </article>
+    <article class="bg-white rounded-xl border border-wx-100 p-4">
+      <h3 class="text-xs uppercase tracking-wide text-wx-500 mb-1">Next 6h</h3>
+      <p class="text-sm text-wx-800">{toneText(firstSentence(data.commentary.todays_forecast), selectedTone)}</p>
+    </article>
+    <article class="bg-white rounded-xl border border-wx-100 p-4">
+      <h3 class="text-xs uppercase tracking-wide text-wx-500 mb-1">Tomorrow Risk</h3>
+      <p class="text-sm font-semibold text-wx-900">{riskLabel(data.commentary)}</p>
+      <p class="text-xs text-wx-600 mt-1">Based on confidence + active alerts</p>
+    </article>
+    <article class="bg-white rounded-xl border border-wx-100 p-4">
+      <h3 class="text-xs uppercase tracking-wide text-wx-500 mb-1">Confidence</h3>
+      <p class="text-sm text-wx-800">{toneText(data.commentary.confidence.explanation, selectedTone)}</p>
+    </article>
+  </section>
+
+  <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6 mb-6">
+    <h2 class="text-lg font-bold text-wx-900 mb-3">What changed since last update?</h2>
+    {#if changes.length === 0}
+      <p class="text-sm text-wx-600">No major shifts detected since your last visit for this city.</p>
+    {:else}
+      <ul class="space-y-2 text-sm text-wx-700">
+        {#each changes as change}
+          <li class="pl-3 border-l-2 border-wx-200">{change}</li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
 
   <div class="mb-6">
     <MicroclimateMap citySlug={data.citySlug} fallbackAois={data.fallbackAois} />
@@ -58,24 +225,33 @@
     <div class="lg:col-span-2 space-y-6">
       <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
         <h2 class="text-lg font-bold text-wx-900 mb-3">Current Conditions</h2>
-        <p class="text-wx-700 leading-relaxed">{data.commentary.current_conditions}</p>
+        <p class="text-wx-700 leading-relaxed">{toneText(data.commentary.current_conditions, selectedTone)}</p>
+      </section>
+
+      <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
+        <h2 class="text-lg font-bold text-wx-900 mb-3">Daypart Narrative</h2>
+        <div class="space-y-3 text-sm text-wx-700">
+          <p><span class="font-semibold text-wx-900">AM:</span> {toneText(daypartSummary.am, selectedTone)}</p>
+          <p><span class="font-semibold text-wx-900">PM:</span> {toneText(daypartSummary.pm, selectedTone)}</p>
+          <p><span class="font-semibold text-wx-900">Night:</span> {toneText(daypartSummary.night, selectedTone)}</p>
+        </div>
       </section>
 
       <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
         <h2 class="text-lg font-bold text-wx-900 mb-3">Today's Forecast</h2>
-        <p class="text-wx-700 leading-relaxed">{data.commentary.todays_forecast}</p>
+        <p class="text-wx-700 leading-relaxed">{toneText(data.commentary.todays_forecast, selectedTone)}</p>
       </section>
 
       <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
         <h2 class="text-lg font-bold text-wx-900 mb-3">Elevation Breakdown</h2>
-        <p class="text-wx-700 leading-relaxed mb-4">{data.commentary.elevation_breakdown.summary}</p>
+        <p class="text-wx-700 leading-relaxed mb-4">{toneText(data.commentary.elevation_breakdown.summary, selectedTone)}</p>
         <div class="space-y-3">
           {#each data.commentary.elevation_breakdown.bands as band}
             <div class="flex items-start gap-3 pl-3 border-l-2 border-wx-200">
               <span class="font-mono text-sm font-semibold text-wx-600 whitespace-nowrap min-w-[80px]">
                 {band.elevation_ft.toLocaleString()} ft
               </span>
-              <p class="text-sm text-wx-700">{band.description}</p>
+              <p class="text-sm text-wx-700">{toneText(band.description, selectedTone)}</p>
             </div>
           {/each}
         </div>
