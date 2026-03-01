@@ -24,8 +24,55 @@ export interface Commentary {
     explanation: string;
   };
   best_model: string;
+  horizon_confidence?: {
+    immediate_0_6h: string;
+    short_6_48h: string;
+    extended_48h_plus: string;
+  };
+  dayparts?: {
+    am: string;
+    pm: string;
+    night: string;
+  };
+  changes?: string[];
+  model_disagreement?: {
+    level: 'low' | 'moderate' | 'high';
+    summary: string;
+    biggest_spread_metric: string;
+    biggest_spread_value: string;
+    confidence_trend: 'improving' | 'stable' | 'degrading';
+  };
+  tone?: string;
   alerts: string[];
   updated_at: string;
+}
+
+export interface MicrozoneInfo {
+  zone_id: string;
+  name: string;
+  slug: string;
+  priority: number;
+  elevation_range_m: number[];
+  description: string;
+}
+
+export interface VerificationScore {
+  model_name: string;
+  zone_id: string;
+  horizon_bucket: string;
+  num_comparisons: number;
+  temp_rmse: number | null;
+  temp_bias: number | null;
+  precip_mae: number | null;
+  wind_rmse: number | null;
+}
+
+export interface BestModelByHorizon {
+  model_name: string;
+  horizon_bucket: string;
+  num_comparisons: number;
+  temp_rmse: number | null;
+  precip_mae: number | null;
 }
 
 export interface CrowdReport {
