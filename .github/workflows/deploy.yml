@@ -160,6 +160,10 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      - name: Inject D1 database ID
+        working-directory: frontend
+        run: sed -i 's/placeholder-update-after-terraform-apply/${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}/' wrangler.toml
+
       - name: Build
         working-directory: frontend
         run: pnpm run build
