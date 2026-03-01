@@ -26,6 +26,8 @@ export interface Commentary {
   best_model: string;
   alerts: string[];
   updated_at: string;
+  dayparts?: { am: string; pm: string; night: string };
+  changes?: string[];
 }
 
 export interface CrowdReport {
