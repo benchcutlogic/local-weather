@@ -50,6 +50,23 @@ function timeAgo(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
+
+function timeUntilOrAgo(iso: string): string {
+  const diffMs = new Date(iso).getTime() - Date.now();
+  const absMins = Math.floor(Math.abs(diffMs) / 60000);
+
+  if (diffMs >= 0) {
+    if (absMins < 60) return `in ${absMins}m`;
+    const hrs = Math.floor(absMins / 60);
+    if (hrs < 24) return `in ${hrs}h`;
+    return `in ${Math.floor(hrs / 24)}d`;
+  }
+
+  if (absMins < 60) return `${absMins}m ago`;
+  const hrs = Math.floor(absMins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 ---
 
 <Layout
@@ -166,7 +183,7 @@ function timeAgo(iso: string): string {
                       </span>
                     </div>
                     <div class="text-xs text-wx-500 mt-1">
-                      run {timeAgo(m.run_time)} • valid thru {timeAgo(m.latest_valid_time)}
+                      run {timeAgo(m.run_time)} • valid thru {timeUntilOrAgo(m.latest_valid_time)}
                     </div>
                   </div>
                 ))}
