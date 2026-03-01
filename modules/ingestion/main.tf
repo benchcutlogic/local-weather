@@ -13,6 +13,11 @@ variable "enable_noaa_pubsub_subscription" {
   type    = bool
   default = false
 }
+variable "edge_cache_purge_url" { default = "" }
+variable "edge_cache_purge_token" {
+  default   = ""
+  sensitive = true
+}
 
 resource "google_artifact_registry_repository" "wx_repo" {
   location      = var.region
@@ -80,6 +85,14 @@ resource "google_cloud_run_v2_service" "grib_parser" {
       env {
         name  = "CITY_AOI_MAP"
         value = var.city_aoi_map_json
+      }
+      env {
+        name  = "EDGE_CACHE_PURGE_URL"
+        value = var.edge_cache_purge_url
+      }
+      env {
+        name  = "EDGE_CACHE_PURGE_TOKEN"
+        value = var.edge_cache_purge_token
       }
     }
     scaling {

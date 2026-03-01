@@ -78,6 +78,8 @@ jobs:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TF_VAR_cloudflare_zone_id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          TF_VAR_edge_cache_purge_token: ${{ secrets.TF_VAR_edge_cache_purge_token }}
+          TF_VAR_edge_cache_purge_url: ${{ secrets.TF_VAR_edge_cache_purge_url }}
 
       - name: Comment Plan on PR
         if: always() && github.event_name == 'pull_request'
@@ -133,3 +135,5 @@ jobs:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TF_VAR_cloudflare_zone_id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          TF_VAR_edge_cache_purge_token: ${{ secrets.TF_VAR_edge_cache_purge_token }}
+          TF_VAR_edge_cache_purge_url: ${{ secrets.TF_VAR_edge_cache_purge_url }}

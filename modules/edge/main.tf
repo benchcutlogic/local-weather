@@ -2,6 +2,11 @@ variable "cloudflare_account_id" {}
 variable "cloudflare_zone_id" {}
 variable "base_domain" {}
 variable "cities" { type = map(any) }
+variable "cache_purge_token" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
 
 terraform {
   required_providers {
@@ -63,6 +68,21 @@ resource "cloudflare_worker_script" "api_gateway" {
   d1_database_binding {
     name        = "DB"
     database_id = cloudflare_d1_database.global_db.id
+  }
+
+  plain_text_binding {
+    name = "COMMENTARY_BASE_URL"
+    text = "https://storage.googleapis.com/hyperlocal-wx-commentary"
+  }
+
+  plain_text_binding {
+    name = "FORECAST_TTL_SECONDS"
+    text = "300"
+  }
+
+  plain_text_binding {
+    name = "CACHE_PURGE_TOKEN"
+    text = var.cache_purge_token
   }
 }
 

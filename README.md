@@ -94,6 +94,8 @@ SvelteKit 2 SSR app deployed to Cloudflare Pages with D1 database.
 - **City pages:** Commentary display, elevation breakdown, model accuracy, community reports
 - **D1 integration:** Crowdsourced weather report submission and display
 - **Premium:** Stripe paywall for detailed model comparison charts
+- **Forecast API:** Reads via `/api/forecast?city=<slug>&model=<name>&units=<imperial|metric>&hourWindow=<n>` through Cloudflare Worker edge cache
+- **Cache invalidation:** Ingestion calls Worker `POST /api/cache/purge` after successful writes (version-bumps cache keys)
 
 ## Cities Configuration
 
@@ -176,3 +178,5 @@ Both workflows use GCP Workload Identity Federation (no static keys).
 | `GCP_PROJECT_NUMBER` | GCP project number (for WIF) |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
+| `TF_VAR_edge_cache_purge_token` | Shared token for Worker cache invalidation endpoint |
+| `TF_VAR_edge_cache_purge_url` | Worker purge URL (e.g., `https://api.denver.<domain>/api/cache/purge`) |
