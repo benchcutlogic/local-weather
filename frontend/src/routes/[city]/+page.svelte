@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { metersToFeet } from '$lib/cities';
+  import MicroclimateMap from '$lib/components/organisms/MicroclimateMap.svelte';
 
   let { data } = $props();
 
@@ -47,6 +48,10 @@
       </span>
       <span class="text-wx-300">Best model: <span class="text-white font-medium">{data.commentary.best_model}</span></span>
     </div>
+  </div>
+
+  <div class="mb-6">
+    <MicroclimateMap citySlug={data.citySlug} fallbackAois={data.fallbackAois} />
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
