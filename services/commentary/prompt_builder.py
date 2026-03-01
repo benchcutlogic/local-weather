@@ -226,6 +226,86 @@ def _data_availability_summary(forecasts: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _hours_ahead(valid_time: object, now: datetime) -> float | None:
+    """Return forecast lead time in hours, or None when unavailable."""
+    if valid_time is None:
+        return None
+
+    if isinstance(valid_time, datetime):
+        vt = valid_time
+    else:
+        try:
+            vt = datetime.fromisoformat(str(valid_time).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    if vt.tzinfo is None:
+        vt = vt.replace(tzinfo=timezone.utc)
+
+    return (vt - now).total_seconds() / 3600.0
+
+
+def _horizon_bucket(hours_ahead: float | None) -> str:
+    if hours_ahead is None:
+        return "unknown"
+    if hours_ahead <= 6:
+        return "immediate_0_6h"
+    if hours_ahead <= 48:
+        return "short_6_48h"
+    return "extended_48h_plus"
+
+
+HORIZON_MODEL_PRIORITY: dict[str, list[str]] = {
+    "immediate_0_6h": ["HRRR", "NAMNEST", "NAM", "GFS", "ECMWF", "GEFS"],
+    "short_6_48h": ["NAMNEST", "NAM", "GFS", "ECMWF", "HRRR", "GEFS"],
+    "extended_48h_plus": ["ECMWF", "GFS", "GEFS", "NAM", "NAMNEST", "HRRR"],
+}
+
+
+def select_models_for_horizon(available_models: set[str], horizon: str) -> list[str]:
+    """Select models for a horizon according to explicit priority rules."""
+    priority = HORIZON_MODEL_PRIORITY.get(horizon, [])
+    selected = [m for m in priority if m in available_models]
+
+    if selected:
+        return selected
+
+    # Graceful fallback: use whatever exists.
+    return sorted(available_models)
+
+
+def _horizon_blend_summary(forecasts: list[dict], now: datetime) -> str:
+    """Create explicit horizon/model guidance section for the LLM prompt."""
+    if not forecasts:
+        return "No horizon blend guidance available (no forecasts)."
+
+    models_by_horizon: dict[str, set[str]] = {
+        "immediate_0_6h": set(),
+        "short_6_48h": set(),
+        "extended_48h_plus": set(),
+    }
+
+    for row in forecasts:
+        model = str(row.get("model_name", "")).upper().strip()
+        if not model:
+            continue
+        hrs = _hours_ahead(row.get("valid_time"), now)
+        bucket = _horizon_bucket(hrs)
+        if bucket in models_by_horizon:
+            models_by_horizon[bucket].add(model)
+
+    lines: list[str] = []
+    for bucket in ("immediate_0_6h", "short_6_48h", "extended_48h_plus"):
+        available = models_by_horizon[bucket]
+        selected = select_models_for_horizon(available, bucket)
+        lines.append(
+            f"- {bucket}: selected={','.join(selected) if selected else 'none'}; "
+            f"available={','.join(sorted(available)) if available else 'none'}"
+        )
+
+    return "\n".join(lines)
+
+
 def build_commentary_prompt(
     city_slug: str,
     city_name: str,
@@ -255,12 +335,20 @@ Generate a comprehensive forecast commentary for {city_name} ({city_slug}). Incl
 5. **Extended Outlook** (3-7 days) — General trend from longer-range models
 6. **Confidence Level** — Based on model agreement, drift trends, and verification scores, how confident
    are you in this forecast? Which model has been most accurate here recently?
+7. **Horizon confidence rationale** — Provide explicit confidence rationale for:
+   - immediate (0-6h)
+   - short (6-48h)
+   - extended (>48h)
+   Use horizon model priority rules from "Horizon-Aware Blend Guidance".
 
 ## Terrain Context
 {_format_terrain(terrain)}
 
 ## Data Availability Summary (important)
 {_data_availability_summary(forecasts)}
+
+## Horizon-Aware Blend Guidance (explicit model priority rules)
+{_horizon_blend_summary(forecasts, now)}
 
 ## Latest Model Forecasts
 {_format_forecasts_by_model(forecasts)}
@@ -293,6 +381,11 @@ Respond with a JSON object containing these fields:
         "explanation": "<1-2 sentences>"
     }},
     "best_model": "<which model has been most accurate here, based on verification scores>",
+    "horizon_confidence": {
+        "immediate_0_6h": "<1 sentence rationale for immediate horizon model blend>",
+        "short_6_48h": "<1 sentence rationale for short horizon model blend>",
+        "extended_48h_plus": "<1 sentence rationale for extended horizon model blend>"
+    },
     "alerts": ["<any notable weather alerts or warnings>"],
     "updated_at": "<ISO timestamp>"
 }}
