@@ -164,9 +164,26 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      - name: Validate D1 secret
+        env:
+          D1_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+        run: |
+          if [[ -z "$D1_ID" ]]; then
+            echo "::error::Missing CLOUDFLARE_D1_DATABASE_ID secret"
+            exit 1
+          fi
+          if [[ "$D1_ID" == "placeholder-update-after-terraform-apply" ]]; then
+            echo "::error::CLOUDFLARE_D1_DATABASE_ID is still set to placeholder"
+            exit 1
+          fi
+
       - name: Inject D1 database ID
         working-directory: frontend
-        run: sed -i 's/placeholder-update-after-terraform-apply/${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}/' wrangler.toml
+        env:
+          D1_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+        run: |
+          sed -i.bak "s/database_id = \"placeholder-update-after-terraform-apply\"/database_id = \"${D1_ID}\"/" wrangler.toml
+          rm -f wrangler.toml.bak
 
       - name: Build
         working-directory: frontend
