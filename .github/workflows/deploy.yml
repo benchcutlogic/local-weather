@@ -165,4 +165,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: frontend
-          command: pages deploy dist --project-name=hyperlocal-wx-app
+          command: pages deploy .svelte-kit/cloudflare --project-name=hyperlocal-wx-app
