@@ -93,39 +93,65 @@
 
   type ThresholdStatus = 'triggered' | 'near' | 'clear';
 
-  function thresholdStatus(key: string, text: string): ThresholdStatus {
-    const has = (patterns: RegExp[]) => patterns.some((pattern) => pattern.test(text));
+  /** Extract the highest numeric value matching threshold-specific patterns from forecast text. */
+  function extractForecastValue(key: string, text: string): number | null {
+    let matches: number[] = [];
 
     if (key === 'snowIn24hIn') {
-      if (has([/winter storm/i, /heavy snow/i, /blizzard/i])) return 'triggered';
-      if (has([/snow/i])) return 'near';
-      return 'clear';
+      // "6 inches of snow", "snow…3-6 in", "snow accumulations of 8 inches"
+      for (const m of text.matchAll(/(\d+(?:\.\d+)?)\s*(?:-\s*(\d+(?:\.\d+)?)\s*)?(?:in(?:ch(?:es)?)?)\s*(?:of\s+)?snow/gi))
+        matches.push(Number(m[2] ?? m[1]));
+      for (const m of text.matchAll(/snow[^.]*?(\d+(?:\.\d+)?)\s*(?:-\s*(\d+(?:\.\d+)?)\s*)?(?:in(?:ch(?:es)?)?)/gi))
+        matches.push(Number(m[2] ?? m[1]));
     }
 
     if (key === 'windGustMph') {
-      if (has([/high wind/i, /wind advisory/i, /gusts?\s*(to|over)?\s*\d+/i])) return 'triggered';
-      if (has([/wind/i])) return 'near';
-      return 'clear';
+      // "gusts to 55 mph", "winds 30-40 mph", "wind gusts of 60 mph"
+      for (const m of text.matchAll(/gusts?\s*(?:to|of|up\s+to|over|near)?\s*(\d+)\s*mph/gi))
+        matches.push(Number(m[1]));
+      for (const m of text.matchAll(/winds?\s*(?:of\s+)?(\d+)\s*(?:-\s*(\d+)\s*)?mph/gi))
+        matches.push(Number(m[2] ?? m[1]));
     }
 
     if (key === 'rainIn1hIn') {
-      if (has([/flash flood/i, /flood/i, /monsoon/i, /heavy rain/i])) return 'triggered';
-      if (has([/rain/i, /storm/i])) return 'near';
-      return 'clear';
+      // "0.5 inches of rain", "rainfall rates of 1 inch per hour", "rain…2 in"
+      for (const m of text.matchAll(/(\d+(?:\.\d+)?)\s*(?:-\s*(\d+(?:\.\d+)?)\s*)?(?:in(?:ch(?:es)?)?)\s*(?:of\s+)?(?:rain|precip)/gi))
+        matches.push(Number(m[2] ?? m[1]));
+      for (const m of text.matchAll(/rain[^.]*?(\d+(?:\.\d+)?)\s*(?:-\s*(\d+(?:\.\d+)?)\s*)?(?:in(?:ch(?:es)?)?)/gi))
+        matches.push(Number(m[2] ?? m[1]));
     }
 
     if (key === 'heatIndexF') {
-      if (has([/excessive heat/i, /dangerous heat/i])) return 'triggered';
-      if (has([/hot/i, /heat/i])) return 'near';
-      return 'clear';
+      // "heat index of 105°F", "heat index near 100", "temperatures reaching 95°F"
+      for (const m of text.matchAll(/heat\s*index\s*(?:of|near|around|up\s+to|reaching)?\s*(\d+)\s*°?f?/gi))
+        matches.push(Number(m[1]));
+      for (const m of text.matchAll(/temp(?:erature)?s?\s*(?:reaching|near|around|up\s+to|of)?\s*(\d+)\s*°?f/gi))
+        matches.push(Number(m[1]));
     }
 
     if (key === 'freezingLevelFt') {
-      if (has([/freezing level/i, /rain\s*to\s*snow/i, /flash freeze/i])) return 'triggered';
-      if (has([/freezing/i, /snow line/i])) return 'near';
+      // "freezing level at 9000 feet", "snow level around 8500 ft"
+      for (const m of text.matchAll(/(?:freezing|snow)\s*level\s*(?:at|near|around|dropping\s+to)?\s*(\d[\d,]*)\s*(?:ft|feet)/gi))
+        matches.push(Number(m[1].replace(/,/g, '')));
+    }
+
+    return matches.length > 0 ? Math.max(...matches) : null;
+  }
+
+  function thresholdStatus(key: string, threshold: number, text: string): ThresholdStatus {
+    const forecast = extractForecastValue(key, text);
+    if (forecast === null) return 'clear';
+
+    // freezingLevelFt triggers when the level drops *below* the configured value
+    if (key === 'freezingLevelFt') {
+      if (forecast <= threshold) return 'triggered';
+      if (forecast <= threshold * 1.2) return 'near';
       return 'clear';
     }
 
+    // All other thresholds trigger when the forecast value exceeds the limit
+    if (forecast >= threshold) return 'triggered';
+    if (forecast >= threshold * 0.8) return 'near';
     return 'clear';
   }
 
@@ -165,7 +191,7 @@
       key,
       label: pretty[key] || key,
       value: `${raw} ${units[key] || ''}`.trim(),
-      status: thresholdStatus(key, text)
+      status: thresholdStatus(key, raw as number, text)
     }));
   });
 
