@@ -17,16 +17,22 @@
   let commentaryLoading = $state(true);
 
   const confidenceColors: Record<string, string> = {
-    high: 'bg-green-100 text-green-800 border-green-200',
-    moderate: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    low: 'bg-red-100 text-red-800 border-red-200'
+    high: 'bg-green-100 text-green-800 border-green-300',
+    moderate: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+    low: 'bg-orange-100 text-orange-800 border-orange-300'
   };
 
-  // Non-color confidence signal (dots pattern for non-color reliance)
   const confidenceShapes: Record<string, string> = {
     high: '●●●',
     moderate: '●●○',
     low: '●○○'
+  };
+
+  const modelColors: Record<string, string> = {
+    HRRR: 'bg-wx-500',
+    GFS: 'bg-emerald-500',
+    NAM: 'bg-amber-500',
+    ECMWF: 'bg-purple-500'
   };
 
   function timeAgo(iso: string): string {
@@ -75,10 +81,10 @@
 </svelte:head>
 
 <!-- Breadcrumb -->
-<nav class="text-sm text-wx-500 mb-4" aria-label="Breadcrumb">
+<nav class="text-sm text-wx-500 mb-5" aria-label="Breadcrumb">
   <ol class="flex items-center gap-1">
     <li><a href="/" class="hover:text-wx-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-wx-500 rounded">Cities</a></li>
-    <li aria-hidden="true" class="mx-1">/</li>
+    <li aria-hidden="true" class="mx-1 text-wx-300">&rsaquo;</li>
     <li class="text-wx-900 font-medium" aria-current="page">
       {data.cityConfig.name}, {data.cityConfig.state}
     </li>
@@ -86,61 +92,105 @@
 </nav>
 
 {#if data.commentary}
-  <!-- Hero header -->
-  <div class="bg-gradient-to-r from-wx-800 to-wx-900 text-white rounded-xl p-6 mb-6">
+  <!-- ===== HERO BANNER ===== -->
+  <section class="bg-gradient-to-r from-wx-900 via-wx-800 to-wx-900 text-white rounded-2xl p-6 md:p-8 mb-6 shadow-xl">
     <div class="flex items-start gap-4">
-      <WeatherIcon condition="cloudy" size="lg" label="Current weather" />
+      <div class="hidden sm:block shrink-0 mt-1">
+        <WeatherIcon condition="cloudy" size="lg" label="Current weather" />
+      </div>
       <div class="flex-1 min-w-0">
-        <h1 class="text-2xl md:text-3xl font-bold mb-2">{data.commentary.headline}</h1>
-        <div class="flex flex-wrap items-center gap-3 text-sm text-wx-200">
-          <span>Updated {timeAgo(data.commentary.updated_at)}</span>
+        <h1 class="text-2xl md:text-3xl font-extrabold leading-tight mb-3">{data.commentary.headline}</h1>
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <span class="text-wx-300">Updated {timeAgo(data.commentary.updated_at)}</span>
           <span
-            class="px-2 py-0.5 rounded-full text-xs font-medium border {confidenceColors[data.commentary.confidence.level]}"
+            class="px-2.5 py-0.5 rounded-full text-xs font-bold border {confidenceColors[data.commentary.confidence.level]}"
             aria-label="Confidence level: {data.commentary.confidence.level}"
           >
             <span aria-hidden="true">{confidenceShapes[data.commentary.confidence.level]}</span>
             {data.commentary.confidence.level.toUpperCase()} confidence
           </span>
-          <span class="text-wx-300">
-            Best model: <span class="text-white font-medium">{data.commentary.best_model}</span>
+          <span class="text-wx-300 text-xs">
+            Best model: <span class="text-white font-semibold">{data.commentary.best_model}</span>
           </span>
+          {#if data.commentary.tone}
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-wx-700/50 text-wx-200 border border-wx-600">
+              {data.commentary.tone}
+            </span>
+          {/if}
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- At-a-glance MetricCards row -->
+    <!-- Alert banner -->
+    {#if data.commentary.alerts && data.commentary.alerts.length > 0}
+      <div class="mt-4 bg-amber-500/20 border border-amber-400/40 rounded-lg px-4 py-2.5 text-sm text-amber-100" role="alert">
+        {#each data.commentary.alerts as alert}
+          <p>{alert}</p>
+        {/each}
+      </div>
+    {/if}
+
+    <!-- Confidence explanation -->
+    {#if data.commentary.confidence.explanation}
+      <p class="mt-3 text-xs text-wx-300 leading-relaxed">{data.commentary.confidence.explanation}</p>
+    {/if}
+  </section>
+
+  <!-- ===== AT-A-GLANCE CARDS ===== -->
   <div
-    class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
+    class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
     aria-label="At-a-glance forecast metrics"
   >
     <MetricCard
       label="Confidence"
       value={quickMetrics?.confidence.toUpperCase() ?? '—'}
       loading={commentaryLoading}
+      class="border-l-4 border-l-wx-500"
     />
     <MetricCard
       label="Best Model"
       value={quickMetrics?.bestModel ?? '—'}
       loading={commentaryLoading}
+      class="border-l-4 border-l-emerald-500"
     />
     <MetricCard
       label="Elevation Bands"
       value={data.cityConfig.elevBandsM.length}
       unit="bands"
       loading={commentaryLoading}
+      class="border-l-4 border-l-amber-500"
     />
     <MetricCard
       label="Last Updated"
       value={quickMetrics ? timeAgo(quickMetrics.updatedAt) : '—'}
       loading={commentaryLoading}
+      class="border-l-4 border-l-purple-500"
     />
   </div>
 
-  <!-- Tabbed navigation -->
+  <!-- ===== MODEL DISAGREEMENT BANNER ===== -->
+  {#if data.commentary.model_disagreement}
+    <div class="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3" role="status">
+      <svg class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+      </svg>
+      <div class="text-sm">
+        <p class="font-semibold text-amber-900">
+          Model Disagreement: {data.commentary.model_disagreement.level.toUpperCase()}
+        </p>
+        <p class="text-amber-800 mt-0.5">{data.commentary.model_disagreement.summary}</p>
+        <div class="mt-1 flex flex-wrap gap-3 text-xs text-amber-700">
+          <span>Biggest spread: {data.commentary.model_disagreement.biggest_spread_metric} ({data.commentary.model_disagreement.biggest_spread_value})</span>
+          <span>Trend: {data.commentary.model_disagreement.confidence_trend}</span>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- ===== TABBED NAVIGATION ===== -->
   <ForecastTabs {activeTab} onTabChange={handleTabChange} />
 
-  <!-- Forecast tab panel -->
+  <!-- ===== FORECAST TAB ===== -->
   <div
     id="tabpanel-forecast"
     role="tabpanel"
@@ -149,139 +199,380 @@
     tabindex="0"
   >
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2 space-y-6">
-        <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
-          <h2 class="text-lg font-bold text-wx-900 mb-3">Current Conditions</h2>
-          {#if commentaryLoading}
-            <div class="space-y-2" aria-busy="true" aria-label="Loading current conditions">
-              <Skeleton height="h-4" />
-              <Skeleton height="h-4" width="w-4/5" />
-              <Skeleton height="h-4" width="w-3/5" />
-            </div>
-          {:else}
-            <p class="text-wx-700 leading-relaxed">{data.commentary.current_conditions}</p>
-          {/if}
+      <!-- ===== LEFT COLUMN (2/3) ===== -->
+      <div class="lg:col-span-2 space-y-5">
+        <!-- Current Conditions -->
+        <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+          <div class="border-l-4 border-l-wx-500 p-5">
+            <h2 class="text-base font-bold text-wx-900 mb-2 flex items-center gap-2">
+              <svg class="w-4 h-4 text-wx-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+              Current Conditions
+            </h2>
+            {#if commentaryLoading}
+              <div class="space-y-2" aria-busy="true" aria-label="Loading current conditions">
+                <Skeleton height="h-4" /><Skeleton height="h-4" width="w-4/5" /><Skeleton height="h-4" width="w-3/5" />
+              </div>
+            {:else}
+              <p class="text-wx-700 leading-relaxed text-sm">{data.commentary.current_conditions}</p>
+            {/if}
+          </div>
         </section>
 
-        <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
-          <h2 class="text-lg font-bold text-wx-900 mb-3">Today's Forecast</h2>
-          {#if commentaryLoading}
-            <div class="space-y-2" aria-busy="true" aria-label="Loading forecast">
-              <Skeleton height="h-4" />
-              <Skeleton height="h-4" width="w-5/6" />
-              <Skeleton height="h-4" width="w-2/3" />
-            </div>
-          {:else}
-            <p class="text-wx-700 leading-relaxed">{data.commentary.todays_forecast}</p>
-          {/if}
+        <!-- Today's Forecast -->
+        <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+          <div class="border-l-4 border-l-emerald-500 p-5">
+            <h2 class="text-base font-bold text-wx-900 mb-2 flex items-center gap-2">
+              <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 15a4 4 0 004 4h9a5 5 0 10-.9-9.95A7 7 0 103 15z"/></svg>
+              Today's Forecast
+            </h2>
+            {#if commentaryLoading}
+              <div class="space-y-2" aria-busy="true" aria-label="Loading forecast">
+                <Skeleton height="h-4" /><Skeleton height="h-4" width="w-5/6" /><Skeleton height="h-4" width="w-2/3" />
+              </div>
+            {:else}
+              <p class="text-wx-700 leading-relaxed text-sm">{data.commentary.todays_forecast}</p>
+            {/if}
+          </div>
         </section>
 
-        <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
-          <h2 class="text-lg font-bold text-wx-900 mb-3">Elevation Breakdown</h2>
-          {#if commentaryLoading}
-            <div class="space-y-3" aria-busy="true" aria-label="Loading elevation breakdown">
-              {#each { length: 3 } as _}
-                <div class="flex items-start gap-3 pl-3 border-l-2 border-wx-100">
-                  <Skeleton height="h-4" width="w-20" />
-                  <Skeleton height="h-4" />
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <p class="text-wx-700 leading-relaxed mb-4">{data.commentary.elevation_breakdown.summary}</p>
-            <div class="space-y-3">
-              {#each data.commentary.elevation_breakdown.bands as band}
-                <div class="flex items-start gap-3 pl-3 border-l-2 border-wx-200">
-                  <span class="font-mono text-sm font-semibold text-wx-600 whitespace-nowrap min-w-[80px]">
-                    {band.elevation_ft.toLocaleString()} ft
-                  </span>
-                  <p class="text-sm text-wx-700">{band.description}</p>
-                </div>
-              {/each}
-            </div>
-          {/if}
+        <!-- Model Analysis -->
+        <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+          <div class="border-l-4 border-l-purple-500 p-5">
+            <h2 class="text-base font-bold text-wx-900 mb-2 flex items-center gap-2">
+              <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+              Model Analysis
+            </h2>
+            {#if commentaryLoading}
+              <div class="space-y-2" aria-busy="true" aria-label="Loading model analysis">
+                <Skeleton height="h-4" /><Skeleton height="h-4" width="w-5/6" />
+              </div>
+            {:else}
+              <p class="text-wx-700 leading-relaxed text-sm">{data.commentary.model_analysis}</p>
+            {/if}
+          </div>
         </section>
+
+        <!-- Horizon Confidence Timeline -->
+        {#if data.commentary.horizon_confidence}
+          <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+            <div class="border-l-4 border-l-cyan-500 p-5">
+              <h2 class="text-base font-bold text-wx-900 mb-3 flex items-center gap-2">
+                <svg class="w-4 h-4 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Action Windows
+              </h2>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="rounded-lg bg-green-50 border border-green-200 p-3">
+                  <p class="text-xs font-bold text-green-800 uppercase tracking-wide mb-1">Now &ndash; 6h</p>
+                  <p class="text-sm text-green-900">{data.commentary.horizon_confidence.immediate_0_6h}</p>
+                </div>
+                <div class="rounded-lg bg-yellow-50 border border-yellow-200 p-3">
+                  <p class="text-xs font-bold text-yellow-800 uppercase tracking-wide mb-1">6h &ndash; 48h</p>
+                  <p class="text-sm text-yellow-900">{data.commentary.horizon_confidence.short_6_48h}</p>
+                </div>
+                <div class="rounded-lg bg-red-50 border border-red-200 p-3">
+                  <p class="text-xs font-bold text-red-800 uppercase tracking-wide mb-1">48h+</p>
+                  <p class="text-sm text-red-900">{data.commentary.horizon_confidence.extended_48h_plus}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        {/if}
+
+        <!-- Dayparts -->
+        {#if data.commentary.dayparts}
+          <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+            <div class="border-l-4 border-l-orange-400 p-5">
+              <h2 class="text-base font-bold text-wx-900 mb-3 flex items-center gap-2">
+                <svg class="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/></svg>
+                Day Breakdown
+              </h2>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                  <p class="text-xs font-bold text-amber-800 uppercase tracking-wide mb-1">Morning</p>
+                  <p class="text-sm text-amber-900">{data.commentary.dayparts.am}</p>
+                </div>
+                <div class="rounded-lg bg-orange-50 border border-orange-200 p-3">
+                  <p class="text-xs font-bold text-orange-800 uppercase tracking-wide mb-1">Afternoon</p>
+                  <p class="text-sm text-orange-900">{data.commentary.dayparts.pm}</p>
+                </div>
+                <div class="rounded-lg bg-indigo-50 border border-indigo-200 p-3">
+                  <p class="text-xs font-bold text-indigo-800 uppercase tracking-wide mb-1">Night</p>
+                  <p class="text-sm text-indigo-900">{data.commentary.dayparts.night}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        {/if}
+
+        <!-- Elevation Breakdown -->
+        <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+          <div class="border-l-4 border-l-teal-500 p-5">
+            <h2 class="text-base font-bold text-wx-900 mb-2 flex items-center gap-2">
+              <svg class="w-4 h-4 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+              Elevation Breakdown
+            </h2>
+            {#if commentaryLoading}
+              <div class="space-y-3" aria-busy="true" aria-label="Loading elevation breakdown">
+                {#each { length: 3 } as _}
+                  <div class="flex items-start gap-3 pl-3 border-l-2 border-wx-100">
+                    <Skeleton height="h-4" width="w-20" />
+                    <Skeleton height="h-4" />
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p class="text-wx-700 leading-relaxed text-sm mb-4">{data.commentary.elevation_breakdown.summary}</p>
+              <div class="space-y-3">
+                {#each data.commentary.elevation_breakdown.bands as band}
+                  <div class="flex items-start gap-3 pl-3 border-l-2 border-teal-300 hover:border-teal-500 transition-colors">
+                    <span class="font-mono text-xs font-bold text-teal-700 whitespace-nowrap min-w-[80px] bg-teal-50 px-2 py-0.5 rounded">
+                      {band.elevation_ft.toLocaleString()} ft
+                    </span>
+                    <p class="text-sm text-wx-700">{band.description}</p>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </section>
+
+        <!-- 7-Day Outlook -->
+        <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+          <div class="border-l-4 border-l-indigo-500 p-5">
+            <h2 class="text-base font-bold text-wx-900 mb-2 flex items-center gap-2">
+              <svg class="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              7-Day Outlook
+            </h2>
+            {#if commentaryLoading}
+              <div class="space-y-2" aria-busy="true"><Skeleton height="h-4" /><Skeleton height="h-4" width="w-4/5" /></div>
+            {:else}
+              <p class="text-wx-700 leading-relaxed text-sm">{data.commentary.extended_outlook}</p>
+            {/if}
+          </div>
+        </section>
+
+        <!-- Changes / Playbook -->
+        {#if data.commentary.changes && data.commentary.changes.length > 0}
+          <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+            <div class="border-l-4 border-l-rose-500 p-5">
+              <h2 class="text-base font-bold text-wx-900 mb-2 flex items-center gap-2">
+                <svg class="w-4 h-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                What Changed
+              </h2>
+              <ul class="space-y-1.5">
+                {#each data.commentary.changes as change}
+                  <li class="flex items-start gap-2 text-sm text-wx-700">
+                    <span class="text-rose-400 mt-0.5 shrink-0">&bull;</span>
+                    {change}
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          </section>
+        {/if}
       </div>
 
-      <div class="space-y-6">
-        <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
-          <h2 class="text-lg font-bold text-wx-900 mb-3">Community Reports</h2>
-          {#if data.reports.length > 0}
-            <div class="space-y-2 mb-4 max-h-48 overflow-y-auto" role="feed" aria-label="Community weather reports">
-              {#each data.reports as report}
-                <article class="text-sm border-b border-wx-50 pb-2 last:border-0">
-                  <div class="text-wx-500 text-xs">{timeAgo(report.created_at)}</div>
-                  {#if report.notes}<p class="text-wx-700 mt-0.5">{report.notes}</p>{/if}
-                </article>
-              {/each}
+      <!-- ===== RIGHT SIDEBAR (1/3) ===== -->
+      <div class="space-y-5">
+        <!-- Data Trust -->
+        {#if data.dataTrust}
+          <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+            <div class="bg-wx-50 px-5 py-3 border-b border-wx-100">
+              <h2 class="text-sm font-bold text-wx-900">Data Trust</h2>
             </div>
-          {/if}
+            <div class="p-5 space-y-3">
+              {#if data.dataTrust.models && data.dataTrust.models.length > 0}
+                {#each data.dataTrust.models as model}
+                  <div class="text-sm">
+                    <div class="flex justify-between items-center mb-1">
+                      <span class="font-medium text-wx-800">{model.model_name}</span>
+                      <span class="text-xs text-wx-500">{model.usable_rows}/{model.total_rows} rows</span>
+                    </div>
+                    <div class="w-full bg-wx-100 rounded-full h-2">
+                      <div
+                        class="h-2 rounded-full transition-all {modelColors[model.model_name] ?? 'bg-wx-400'}"
+                        style="width: {model.total_rows > 0 ? Math.round((model.usable_rows / model.total_rows) * 100) : 0}%"
+                      ></div>
+                    </div>
+                  </div>
+                {/each}
+              {:else}
+                <p class="text-sm text-wx-500">
+                  {data.dataTrust.status === 'missing'
+                    ? 'Cannot reach ingestor — unable data coverage.'
+                    : 'Trust metrics loading...'}
+                </p>
+              {/if}
+            </div>
+          </section>
+        {/if}
 
-          <form
-            method="POST"
-            action="?/report"
-            use:enhance={() => {
-              reportSubmitting = true;
-              return async ({ update }) => {
-                reportSubmitting = false;
-                track('report_submitted', {
-                  city_slug: data.citySlug,
-                  has_temp: false,
-                  has_snow: false
-                });
-                await update();
-              };
-            }}
-            class="space-y-2"
-            aria-label="Submit community weather report"
-          >
-            <label for="report-notes" class="sr-only">Weather observation notes</label>
-            <textarea
-              id="report-notes"
-              name="notes"
-              placeholder="What's it like outside?"
-              rows="2"
-              class="w-full px-3 py-2 text-sm border border-wx-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-wx-400"
-              disabled={reportSubmitting}
-            ></textarea>
-            <div class="grid grid-cols-2 gap-2">
-              <label class="contents">
-                <span class="sr-only">Temperature in Fahrenheit</span>
-                <input
-                  type="number"
-                  name="temp_f"
-                  placeholder="Temp (°F)"
-                  step="1"
-                  class="px-3 py-1.5 text-sm border border-wx-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-wx-400"
-                  disabled={reportSubmitting}
-                />
-              </label>
-              <label class="contents">
-                <span class="sr-only">Snow depth in inches</span>
-                <input
-                  type="number"
-                  name="snow_in"
-                  placeholder="Snow (in)"
-                  step="0.1"
-                  class="px-3 py-1.5 text-sm border border-wx-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-wx-400"
-                  disabled={reportSubmitting}
-                />
-              </label>
+        <!-- Model Accuracy -->
+        <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+          <div class="bg-wx-50 px-5 py-3 border-b border-wx-100">
+            <h2 class="text-sm font-bold text-wx-900">Model Accuracy</h2>
+          </div>
+          <div class="p-5">
+            {#if data.dataTrust?.models && data.dataTrust.models.length > 0}
+              <p class="text-xs text-wx-500 mb-3">Row-level verification (total vs. usable)</p>
+              <div class="space-y-3">
+                {#each data.dataTrust.models as model}
+                  <div>
+                    <div class="flex justify-between text-xs mb-1">
+                      <span class="font-semibold text-wx-800">{model.model_name}</span>
+                      <span class="text-wx-500">{model.total_rows > 0 ? Math.round((model.usable_rows / model.total_rows) * 100) : 0}%</span>
+                    </div>
+                    <div class="w-full bg-wx-100 rounded-full h-2.5">
+                      <div
+                        class="h-2.5 rounded-full transition-all {modelColors[model.model_name] ?? 'bg-wx-400'}"
+                        style="width: {model.total_rows > 0 ? Math.round((model.usable_rows / model.total_rows) * 100) : 0}%"
+                      ></div>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p class="text-sm text-wx-500">No accuracy data available yet.</p>
+            {/if}
+          </div>
+        </section>
+
+        <!-- Model Drift -->
+        {#if data.commentary.model_disagreement}
+          <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+            <div class="bg-wx-50 px-5 py-3 border-b border-wx-100 flex items-center justify-between">
+              <h2 class="text-sm font-bold text-wx-900">Model Drift</h2>
+              <span class="text-xs font-medium px-2 py-0.5 rounded-full {
+                data.commentary.model_disagreement.confidence_trend === 'improving' ? 'bg-green-100 text-green-700' :
+                data.commentary.model_disagreement.confidence_trend === 'degrading' ? 'bg-red-100 text-red-700' :
+                'bg-wx-100 text-wx-600'
+              }">
+                {data.commentary.model_disagreement.confidence_trend}
+              </span>
             </div>
-            <button
-              type="submit"
-              disabled={reportSubmitting}
-              class="w-full bg-wx-600 hover:bg-wx-500 disabled:opacity-60 text-white text-sm font-medium py-2 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wx-400"
+            <div class="p-5 text-sm text-wx-700 space-y-2">
+              <p>Drift chart placeholder</p>
+              <p class="text-xs text-wx-500">Intraday model comparison charts will appear here.</p>
+            </div>
+          </section>
+        {/if}
+
+        <!-- Community Reports -->
+        <section class="bg-white rounded-xl shadow-md border border-wx-100 overflow-hidden">
+          <div class="bg-wx-50 px-5 py-3 border-b border-wx-100">
+            <h2 class="text-sm font-bold text-wx-900">Community Reports</h2>
+          </div>
+          <div class="p-5">
+            {#if data.reports.length > 0}
+              <div class="space-y-2 mb-4 max-h-48 overflow-y-auto" role="feed" aria-label="Community weather reports">
+                {#each data.reports as report}
+                  <article class="text-sm border-b border-wx-50 pb-2 last:border-0">
+                    <div class="text-wx-500 text-xs">{timeAgo(report.created_at)}</div>
+                    {#if report.notes}<p class="text-wx-700 mt-0.5">{report.notes}</p>{/if}
+                  </article>
+                {/each}
+              </div>
+            {:else}
+              <p class="text-xs text-wx-500 mb-3">No reports yet. Be the first!</p>
+            {/if}
+
+            <form
+              method="POST"
+              action="?/report"
+              use:enhance={() => {
+                reportSubmitting = true;
+                return async ({ update }) => {
+                  reportSubmitting = false;
+                  track('report_submitted', {
+                    city_slug: data.citySlug,
+                    has_temp: false,
+                    has_snow: false
+                  });
+                  await update();
+                };
+              }}
+              class="space-y-2"
+              aria-label="Submit community weather report"
             >
-              {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+              <label for="report-notes" class="sr-only">Weather observation notes</label>
+              <textarea
+                id="report-notes"
+                name="notes"
+                placeholder="What's it like outside?"
+                rows="2"
+                class="w-full px-3 py-2 text-sm border border-wx-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-wx-400 bg-wx-50"
+                disabled={reportSubmitting}
+              ></textarea>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="contents">
+                  <span class="sr-only">Temperature in Fahrenheit</span>
+                  <input
+                    type="number"
+                    name="temp_f"
+                    placeholder="Temp (°F)"
+                    step="1"
+                    class="px-3 py-1.5 text-sm border border-wx-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-wx-400 bg-wx-50"
+                    disabled={reportSubmitting}
+                  />
+                </label>
+                <label class="contents">
+                  <span class="sr-only">Snow depth in inches</span>
+                  <input
+                    type="number"
+                    name="snow_in"
+                    placeholder="Snow (in)"
+                    step="0.1"
+                    class="px-3 py-1.5 text-sm border border-wx-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-wx-400 bg-wx-50"
+                    disabled={reportSubmitting}
+                  />
+                </label>
+              </div>
+              <button
+                type="submit"
+                disabled={reportSubmitting}
+                class="w-full bg-wx-600 hover:bg-wx-500 disabled:opacity-60 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wx-400 shadow-sm"
+              >
+                {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <!-- Premium Access CTA -->
+        <section class="bg-gradient-to-br from-teal-700 to-teal-900 text-white rounded-xl shadow-lg overflow-hidden">
+          <div class="p-5">
+            <h2 class="text-sm font-bold mb-3">Premium Access</h2>
+            <ul class="space-y-2 text-xs text-teal-100">
+              <li class="flex items-start gap-2">
+                <svg class="w-3.5 h-3.5 text-teal-300 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                Extended model comparison charts
+              </li>
+              <li class="flex items-start gap-2">
+                <svg class="w-3.5 h-3.5 text-teal-300 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                Automated weather alert webhooks
+              </li>
+              <li class="flex items-start gap-2">
+                <svg class="w-3.5 h-3.5 text-teal-300 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                Push alerts for significant model drift
+              </li>
+              <li class="flex items-start gap-2">
+                <svg class="w-3.5 h-3.5 text-teal-300 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                API access for integrations
+              </li>
+            </ul>
+            <button
+              type="button"
+              class="mt-4 w-full bg-white text-teal-800 font-bold text-sm py-2.5 rounded-lg hover:bg-teal-50 transition-colors shadow-sm"
+            >
+              Subscribe &mdash; $5/mo
             </button>
-          </form>
+          </div>
         </section>
       </div>
     </div>
   </div>
 
-  <!-- Outlook tab panel -->
+  <!-- ===== OUTLOOK TAB ===== -->
   <div
     id="tabpanel-outlook"
     role="tabpanel"
@@ -289,14 +580,11 @@
     class={activeTab === 'outlook' ? 'block mt-6' : 'hidden'}
     tabindex="0"
   >
-    <section class="bg-white rounded-xl shadow-sm border border-wx-100 p-6">
+    <section class="bg-white rounded-xl shadow-md border border-wx-100 p-6">
       <h2 class="text-lg font-bold text-wx-900 mb-3">Extended Outlook</h2>
-      <p class="text-wx-500 text-sm">
-        Extended multi-day outlook content will appear here once the backend supports
-        multi-day commentary payloads.
-      </p>
+      <p class="text-wx-700 text-sm leading-relaxed">{data.commentary.extended_outlook}</p>
       {#if data.dataTrust}
-        <div class="mt-6 border-t border-wx-50 pt-4">
+        <div class="mt-6 border-t border-wx-100 pt-4">
           <h3 class="text-sm font-semibold text-wx-900 mb-3">Model Health</h3>
           <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
             {#each Object.entries(data.dataTrust) as [key, value]}
@@ -314,7 +602,7 @@
     </section>
   </div>
 
-  <!-- Microclimate Map tab panel -->
+  <!-- ===== MAP TAB ===== -->
   <div
     id="tabpanel-map"
     role="tabpanel"
