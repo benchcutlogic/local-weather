@@ -63,7 +63,11 @@ jobs:
           else
             echo "gcp_ready=false" >> $GITHUB_OUTPUT
           fi
-          [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]] && echo "cf_ready=true" >> $GITHUB_OUTPUT || echo "cf_ready=false" >> $GITHUB_OUTPUT
+          if [[ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" && -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" && -n "${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}" ]]; then
+            echo "cf_ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "cf_ready=false" >> $GITHUB_OUTPUT
+          fi
 
   deploy-ingest:
     name: Deploy Ingest Service
@@ -159,6 +163,10 @@ jobs:
       - name: Install Dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
+
+      - name: Inject D1 database ID
+        working-directory: frontend
+        run: sed -i 's/placeholder-update-after-terraform-apply/${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}/' wrangler.toml
 
       - name: Build
         working-directory: frontend

@@ -10,4 +10,4 @@ GCS_COMMENTARY_BASE = "https://storage.googleapis.com/hyperlocal-wx-commentary"
 [[d1_databases]]
 binding = "DB"
 database_name = "hyperlocal_weather_db"
-database_id = "placeholder-update-after-terraform-apply"
+database_id = "placeholder-update-after-terraform-apply"  # CI replaces via CLOUDFLARE_D1_DATABASE_ID secret

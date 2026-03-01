@@ -193,6 +193,75 @@ def get_data_trust_summary(city_slug: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def get_verification_scores_by_zone(city_slug: str, zone_id: str | None = None) -> list[dict]:
+    """Get rolling verification scores optionally filtered by microzone.
+
+    Supports #38: rolling microclimate verification scores keyed by
+    city + optional zone + horizon + model.
+    """
+    client = _get_client()
+    zone_filter = ""
+    params = [bigquery.ScalarQueryParameter("city_slug", "STRING", city_slug)]
+    if zone_id:
+        zone_filter = "AND zone_id = @zone_id"
+        params.append(bigquery.ScalarQueryParameter("zone_id", "STRING", zone_id))
+
+    query = f"""
+    SELECT
+        model_name,
+        COALESCE(zone_id, 'city-wide') AS zone_id,
+        horizon_bucket,
+        num_comparisons,
+        temp_rmse,
+        temp_bias,
+        precip_mae,
+        wind_rmse,
+        score_updated_at
+    FROM `{GCP_PROJECT}.{BQ_DATASET}.verification_scores`
+    WHERE city_slug = @city_slug
+        {zone_filter}
+    ORDER BY model_name, horizon_bucket
+    """
+    job_config = bigquery.QueryJobConfig(query_parameters=params)
+    rows = client.query(query, job_config=job_config).result()
+    return [dict(row) for row in rows]
+
+
+def get_best_model_by_horizon(city_slug: str) -> list[dict]:
+    """Return the best-performing model per horizon bucket for a city.
+
+    Used by the frontend model performance summary card (#38).
+    """
+    client = _get_client()
+    query = f"""
+    WITH ranked AS (
+        SELECT
+            model_name,
+            COALESCE(horizon_bucket, 'all') AS horizon_bucket,
+            num_comparisons,
+            temp_rmse,
+            precip_mae,
+            ROW_NUMBER() OVER (
+                PARTITION BY COALESCE(horizon_bucket, 'all')
+                ORDER BY temp_rmse ASC
+            ) AS rn
+        FROM `{GCP_PROJECT}.{BQ_DATASET}.verification_scores`
+        WHERE city_slug = @city_slug
+            AND num_comparisons >= 10
+    )
+    SELECT model_name, horizon_bucket, num_comparisons, temp_rmse, precip_mae
+    FROM ranked
+    WHERE rn = 1
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("city_slug", "STRING", city_slug),
+        ]
+    )
+    rows = client.query(query, job_config=job_config).result()
+    return [dict(row) for row in rows]
+
+
 def get_all_city_slugs() -> list[str]:
     """Get all distinct city slugs from forecast_runs."""
     client = _get_client()
