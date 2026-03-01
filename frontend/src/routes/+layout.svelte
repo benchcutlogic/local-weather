@@ -15,8 +15,12 @@
 <nav class="bg-wx-950 text-white sticky top-0 z-50 shadow-lg">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-12">
     <a href="/" class="flex items-center gap-2 font-bold text-base tracking-tight hover:opacity-90 transition-opacity">
-      <svg class="w-5 h-5 text-wx-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-        <path d="M3 15a4 4 0 0 0 4 4h9a5 5 0 1 0-.9-9.95A7 7 0 1 0 3 15z" />
+      <!-- Cloud + mountain combined logo mark -->
+      <svg class="w-6 h-6 shrink-0" viewBox="0 0 28 24" fill="none" aria-hidden="true">
+        <!-- mountain peaks -->
+        <path d="M2 20 L9 9 L14 15 L18 8 L26 20 Z" fill="#7cc5fc" opacity="0.7"/>
+        <!-- cloud -->
+        <path d="M7 13a5 5 0 0 0 0 10h13a4 4 0 1 0-.7-7.93A6 6 0 1 0 7 13z" fill="#36a8f8" opacity="0.9"/>
       </svg>
       HyperlocalWx
     </a>
