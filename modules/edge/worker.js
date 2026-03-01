@@ -164,9 +164,10 @@ export default {
         );
       }
 
-      await bumpCacheVersion(env.DB, city);
-      if (city !== "all") {
+      if (city === "all") {
         await bumpCacheVersion(env.DB, "all");
+      } else {
+        await bumpCacheVersion(env.DB, city);
       }
 
       return json({ ok: true, city, purgedAt: new Date().toISOString() });
