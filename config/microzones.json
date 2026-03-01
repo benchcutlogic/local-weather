@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "microzones": {
+    "durango": [
+      {
+        "zone_id": "dgo-valley-floor",
+        "name": "Animas Valley Floor",
+        "slug": "animas-valley",
+        "priority": 1,
+        "elevation_range_m": [1980, 2100],
+        "center": { "lat": 37.2753, "lon": -107.8801 },
+        "description": "Downtown Durango and the Animas River corridor. Sheltered from wind, prone to cold-air pooling and fog.",
+        "terrain_notes": "River valley, temperature inversions common in winter"
+      },
+      {
+        "zone_id": "dgo-foothills-west",
+        "name": "La Plata Foothills",
+        "slug": "la-plata-foothills",
+        "priority": 2,
+        "elevation_range_m": [2100, 2600],
+        "center": { "lat": 37.32, "lon": -107.95 },
+        "description": "Western foothills rising toward the La Plata Mountains. Higher precip, more wind exposure.",
+        "terrain_notes": "Transitional terrain, orographic enhancement on westerly flow"
+      },
+      {
+        "zone_id": "dgo-coal-bank",
+        "name": "Coal Bank / Molas Pass Approach",
+        "slug": "coal-bank-molas",
+        "priority": 3,
+        "elevation_range_m": [2600, 3300],
+        "center": { "lat": 37.6988, "lon": -107.7769 },
+        "description": "High-elevation passes on US-550. Extreme wind, heavy snow, whiteout risk. Critical travel corridor.",
+        "terrain_notes": "Alpine passes, exposed ridgeline, frequent blowing snow"
+      },
+      {
+        "zone_id": "dgo-hermosa",
+        "name": "Hermosa Valley",
+        "slug": "hermosa-valley",
+        "priority": 4,
+        "elevation_range_m": [2000, 2300],
+        "center": { "lat": 37.39, "lon": -107.84 },
+        "description": "North of town along Hermosa Creek. Slightly higher and cooler than valley floor.",
+        "terrain_notes": "Narrow valley with cold air drainage"
+      },
+      {
+        "zone_id": "dgo-south-mesa",
+        "name": "South Durango Mesa",
+        "slug": "south-mesa",
+        "priority": 5,
+        "elevation_range_m": [2050, 2200],
+        "center": { "lat": 37.24, "lon": -107.87 },
+        "description": "Mesa country south of town. More wind-exposed, drier microclimate.",
+        "terrain_notes": "Open mesa, faster snow melt, wind-prone"
+      }
+    ]
+  }
+}
