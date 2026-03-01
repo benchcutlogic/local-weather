@@ -15,10 +15,26 @@ variable "base_domain" { type = string }
 variable "cities" {
   description = "Map of all target cities for the platform."
   type = map(object({
-    name       = string
-    lat        = number
-    lon        = number
-    elev_bands = list(number)
+    name             = string
+    state            = optional(string)
+    aliases          = optional(list(string), [])
+    lat              = number
+    lon              = number
+    timezone         = optional(string, "America/Denver")
+    elev_bands       = list(number)
+    terrain_profile  = optional(string)
+    seasonal_hazards = optional(list(string), [])
+    alert_thresholds = optional(object({
+      snow_in_24h_in    = optional(number)
+      wind_gust_mph     = optional(number)
+      rain_in_1h_in     = optional(number)
+      heat_index_f      = optional(number)
+      freezing_level_ft = optional(number)
+    }))
+    branding = optional(object({
+      hero_image    = optional(string)
+      local_tagline = optional(string)
+    }))
   }))
 }
 

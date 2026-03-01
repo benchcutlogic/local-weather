@@ -50,7 +50,7 @@ NOAA GCS Buckets (HRRR/GFS/NAM/ECMWF)
 │   ├── ingest/                      # GRIB2 byte-range ingestion (Python/FastAPI)
 │   ├── commentary/                  # Gemini forecast commentary (Python/FastAPI)
 │   └── gee/                         # Earth Engine extraction scripts
-├── frontend/                        # Astro 5 SSR site (Cloudflare Pages)
+├── frontend/                        # SvelteKit 2 SSR app (Cloudflare Pages)
 ├── .github/workflows/
 │   ├── terraform.yml                # Plan on PR, apply on merge
 │   └── deploy.yml                   # Build & deploy services + frontend
@@ -86,23 +86,50 @@ Cloud Run Job scripts for Earth Engine data extraction.
 
 ### Frontend (`frontend/`)
 
-Astro 5 SSR site deployed to Cloudflare Pages with D1 database.
+SvelteKit 2 SSR app deployed to Cloudflare Pages with D1 database.
 
+- **UI stack:** SvelteKit + Tailwind v4 + shadcn-svelte conventions
+- **Design system structure:** `atoms/`, `molecules/`, `organisms/` under `src/lib/components/`
+- **Storybook:** configured for Svelte components in `.storybook/`
 - **City pages:** Commentary display, elevation breakdown, model accuracy, community reports
 - **D1 integration:** Crowdsourced weather report submission and display
 - **Premium:** Stripe paywall for detailed model comparison charts
 
 ## Cities Configuration
 
-Cities are configured in `terraform.tfvars` and passed to services as the `CITIES_CONFIG` JSON env var:
+Use `config/city-catalog.json` as the canonical per-city product schema.
+
+- JSON Schema: `config/city-catalog.schema.json`
+- Frontend city config is generated: `frontend/src/lib/cities.ts`
+- Terraform still consumes `terraform.tfvars` (`cities`, `aois`, `city_aoi_map`) for infra + service runtime.
+
+Generate frontend city config from the catalog:
+
+```bash
+node scripts/generate-cities-ts.mjs
+```
+
+Example city fields in Terraform (superset supported):
 
 ```hcl
 cities = {
-  "denver" = {
-    name       = "Denver, CO"
-    lat        = 39.7392
-    lon        = -104.9903
-    elev_bands = [1500, 1600, 1700, 1800, 2000]
+  "durango" = {
+    name             = "Durango"
+    state            = "CO"
+    aliases          = ["dgo"]
+    lat              = 37.2753
+    lon              = -107.8801
+    timezone         = "America/Denver"
+    elev_bands       = [2000, 2200, 2500, 2800, 3000]
+    terrain_profile  = "mountain"
+    seasonal_hazards = ["snowpack", "monsoon_flooding", "fire_smoke"]
+    alert_thresholds = {
+      snow_in_24h_in    = 10
+      wind_gust_mph     = 50
+      rain_in_1h_in     = 0.6
+      heat_index_f      = 92
+      freezing_level_ft = 10000
+    }
   }
 }
 ```
