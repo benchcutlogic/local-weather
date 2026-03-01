@@ -56,14 +56,14 @@ async function bumpCacheVersion(db, city) {
     .run();
 }
 
-function buildForecastCacheUrl(requestUrl, city, model, units, hourWindow, version) {
+function buildForecastCacheUrl(requestUrl, city, version) {
+  // Only city + cache version in the key — upstream always returns the same
+  // latest.json regardless of model/units/hourWindow, so including those params
+  // would fragment the cache with duplicate entries.
   const cacheUrl = new URL(requestUrl.toString());
   cacheUrl.pathname = "/api/forecast";
   cacheUrl.search = "";
   cacheUrl.searchParams.set("city", city);
-  cacheUrl.searchParams.set("model", model || "all");
-  cacheUrl.searchParams.set("units", units || "imperial");
-  cacheUrl.searchParams.set("hourWindow", hourWindow || "24");
   cacheUrl.searchParams.set("v", String(version ?? 1));
   return cacheUrl;
 }
@@ -81,10 +81,6 @@ export default {
     // Forecast proxy + edge cache (Cloudflare Worker as serving layer)
     if (path === "/api/forecast" && request.method === "GET") {
       const city = url.searchParams.get("city")?.trim().toLowerCase();
-      const model = url.searchParams.get("model")?.trim().toLowerCase();
-      const units = url.searchParams.get("units")?.trim().toLowerCase();
-      const hourWindow = url.searchParams.get("hourWindow")?.trim();
-
       if (!city || !/^[a-z0-9-]+$/.test(city)) {
         return json(
           { error: "Missing or invalid city. Use ?city=<slug>." },
@@ -93,14 +89,7 @@ export default {
       }
 
       const cacheVersion = await getCacheVersion(env.DB, city);
-      const cacheUrl = buildForecastCacheUrl(
-        url,
-        city,
-        model,
-        units,
-        hourWindow,
-        cacheVersion,
-      );
+      const cacheUrl = buildForecastCacheUrl(url, city, cacheVersion);
       const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
       const cache = caches.default;
       const cached = await cache.match(cacheKey);
