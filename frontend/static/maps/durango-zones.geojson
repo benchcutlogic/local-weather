@@ -1,0 +1,131 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "zone_id": "dgo-z-001",
+        "label": "Animas River Corridor",
+        "elev_min_m": 1950,
+        "elev_max_m": 2200,
+        "type": "valley"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-107.96, 37.20],
+          [-107.91, 37.20],
+          [-107.90, 37.28],
+          [-107.95, 37.30],
+          [-107.98, 37.26],
+          [-107.96, 37.20]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zone_id": "dgo-z-002",
+        "label": "Town Foothills West",
+        "elev_min_m": 2150,
+        "elev_max_m": 2550,
+        "type": "foothills"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-108.08, 37.22],
+          [-107.99, 37.21],
+          [-107.98, 37.30],
+          [-108.06, 37.34],
+          [-108.11, 37.28],
+          [-108.08, 37.22]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zone_id": "dgo-z-003",
+        "label": "Upper North-Facing Ridge",
+        "elev_min_m": 2500,
+        "elev_max_m": 3100,
+        "type": "ridge"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-108.02, 37.31],
+          [-107.94, 37.30],
+          [-107.91, 37.38],
+          [-107.98, 37.43],
+          [-108.06, 37.39],
+          [-108.02, 37.31]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zone_id": "dgo-z-004",
+        "label": "East Benchlands",
+        "elev_min_m": 2050,
+        "elev_max_m": 2450,
+        "type": "benchlands"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-107.91, 37.22],
+          [-107.83, 37.23],
+          [-107.81, 37.32],
+          [-107.88, 37.35],
+          [-107.92, 37.29],
+          [-107.91, 37.22]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zone_id": "dgo-z-005",
+        "label": "Southern Mesa Edge",
+        "elev_min_m": 2100,
+        "elev_max_m": 2500,
+        "type": "mesa"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-108.00, 37.14],
+          [-107.90, 37.14],
+          [-107.89, 37.21],
+          [-107.98, 37.22],
+          [-108.03, 37.18],
+          [-108.00, 37.14]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zone_id": "dgo-z-006",
+        "label": "High Peaks Transition",
+        "elev_min_m": 2800,
+        "elev_max_m": 3400,
+        "type": "peaks"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-107.93, 37.36],
+          [-107.84, 37.34],
+          [-107.80, 37.41],
+          [-107.87, 37.46],
+          [-107.95, 37.43],
+          [-107.93, 37.36]
+        ]]
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { fetchCommentary, fetchDataTrust, fetchReports } from '$lib/api';
 import { getCityBySlug } from '$lib/cities';
+import { getZoneSummary } from '$lib/map/mockData';
 
 function fToK(tempF: number): number {
   return ((tempF - 32) * 5) / 9 + 273.15;
@@ -29,13 +30,16 @@ export const load = async ({ params, platform }) => {
     }
   }
 
+  const zoneSummary = getZoneSummary(citySlug);
+
   return {
     citySlug,
     cityConfig,
     commentaryResult,
     commentary: commentaryResult.commentary,
     dataTrust,
-    reports
+    reports,
+    fallbackAois: zoneSummary.aois
   };
 };
 
