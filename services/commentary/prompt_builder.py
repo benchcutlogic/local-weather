@@ -381,11 +381,11 @@ Respond with a JSON object containing these fields:
         "explanation": "<1-2 sentences>"
     }},
     "best_model": "<which model has been most accurate here, based on verification scores>",
-    "horizon_confidence": {
+    "horizon_confidence": {{
         "immediate_0_6h": "<1 sentence rationale for immediate horizon model blend>",
         "short_6_48h": "<1 sentence rationale for short horizon model blend>",
         "extended_48h_plus": "<1 sentence rationale for extended horizon model blend>"
-    },
+    }},
     "alerts": ["<any notable weather alerts or warnings>"],
     "updated_at": "<ISO timestamp>"
 }}
